@@ -58,10 +58,7 @@ class RoundedButton(tk.Canvas):
         self._tid = self.create_text(
             cw // 2, ch // 2, text=text, fill=fg, font=font, anchor="center")
 
-        for item in (self._shape, self._tid):
-            self.tag_bind(item, "<Button-1>", self._click)
-            self.tag_bind(item, "<Enter>",    self._enter)
-            self.tag_bind(item, "<Leave>",    self._leave)
+        # Bind only on the canvas level to avoid double-firing through item propagation
         self.bind("<Button-1>",  self._click)
         self.bind("<Enter>",     self._enter)
         self.bind("<Leave>",     self._leave)
