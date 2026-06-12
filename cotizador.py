@@ -1025,8 +1025,8 @@ def _draw_shapes_on_canvas(cv, shapes_cm, S, ox, oy, fill, outline, samples=60):
 # PDF export
 # ---------------------------------------------------------------------------
 def _pil_nesting_image(placements, n_pieces, piece_sizes, scale=6):
-    """Render nesting layout to a PIL Image (colored rectangles + names)."""
-    from PIL import Image, ImageDraw, ImageFont
+    """Render nesting layout to a PIL Image with actual letter shapes."""
+    from PIL import Image, ImageDraw
     COLS = 3
     GAP  = 12
     PW = int(PIECE_W * scale)
@@ -1035,37 +1035,110 @@ def _pil_nesting_image(placements, n_pieces, piece_sizes, scale=6):
     W = COLS * (PW + GAP) + GAP
     H = rows * (PH + GAP) + GAP
 
-    img  = Image.new("RGB", (W, H), "#1e1e2e")
+    img  = Image.new("RGB", (W, H), "#f0f0f0")
     draw = ImageDraw.Draw(img)
 
-    COLORS_PIL = ["#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#fab387",
-                  "#f9e2af","#94e2d5","#89dceb","#b4befe","#eba0ac"]
+    COLORS_PIL = ["#4f86c6","#e05c5c","#3aaa6a","#e07c3a","#8a5cd0",
+                  "#c45c8a","#3aaab4","#d4a017","#5c8ae0","#7a7a7a"]
 
+    # Draw piece backgrounds
     for pi in range(n_pieces):
         col, row = pi % COLS, pi // COLS
-        is_half = piece_sizes.get(pi, "full") == "half"
+        psize = piece_sizes.get(pi, "full")
+        is_half = psize == "half"
+        is_xl   = psize == "xl"
         pw = int((PIECE_H if is_half else PIECE_W) * scale)
-        ph = PH
+        ph = int((PIECE_CONFIGS["xl"][1] if is_xl else PIECE_H) * scale)
         ox = GAP + col * (PW + GAP)
         oy = GAP + row * (PH + GAP)
-        draw.rectangle([ox, oy, ox+pw, oy+ph], fill="#313244", outline="#585b70", width=2)
-        draw.text((ox+4, oy+4), f"P{pi+1} ({'60x60' if is_half else '120x60'} cm)",
-                  fill="#888899")
+        draw.rectangle([ox, oy, ox+pw, oy+ph], fill="#ffffff", outline="#cccccc", width=2)
+        label = "60x60" if is_half else ("120x240" if is_xl else "120x60")
+        draw.text((ox+4, oy+4), f"P{pi+1} ({label} cm)", fill="#aaaaaa")
 
+    def _tc(px_, py_, cx_svg, cy_svg, sc, cos_a, sin_a, pcx, pcy):
+        dx = (px_ - cx_svg) * sc
+        dy = (py_ - cy_svg) * sc
+        return (pcx + dx*cos_a - dy*sin_a,
+                pcy + dx*sin_a + dy*cos_a)
+
+    def _shape_polygons(p, ox, oy):
+        """Returns list of pixel-coordinate polygon point lists for all shapes."""
+        bx0, by0   = p.get("bbox_origin",  (0, 0))
+        w_px, h_px = p.get("bbox_size_px", (1, 1))
+        sc   = p.get("scale", 1.0)
+        ang  = p.get("angle", 0.0)
+        cos_a = math.cos(math.radians(ang))
+        sin_a = math.sin(math.radians(ang))
+        cx_svg = bx0 + w_px / 2
+        cy_svg = by0 + h_px / 2
+        pcx = p["x"] + p["actual_w"] / 2
+        pcy = p["y"] + p["actual_h"] / 2
+
+        def tc(px_, py_):
+            x, y = _tc(px_, py_, cx_svg, cy_svg, sc, cos_a, sin_a, pcx, pcy)
+            return (ox + x * scale, oy + y * scale)
+
+        polys = []
+        for shape in p.get("shapes", []):
+            try:
+                t = shape["type"]
+                if t == "path":
+                    for sp_str in __import__("re").findall(r'[Mm][^Mm]+', shape["d"]):
+                        try:
+                            sp = parse_path(sp_str)
+                            pts = [tc(sp.point(k/80).real, sp.point(k/80).imag)
+                                   for k in range(81)]
+                            if len(pts) >= 3:
+                                polys.append(pts)
+                        except Exception:
+                            pass
+                elif t == "rect":
+                    corners = [(shape["x"],              shape["y"]),
+                               (shape["x"]+shape["w"],   shape["y"]),
+                               (shape["x"]+shape["w"],   shape["y"]+shape["h"]),
+                               (shape["x"],              shape["y"]+shape["h"])]
+                    polys.append([tc(x, y) for x, y in corners])
+                elif t in ("circle", "ellipse"):
+                    r1 = shape.get("r", shape.get("rx", 1))
+                    r2 = shape.get("r", shape.get("ry", 1))
+                    cx2, cy2 = shape.get("cx", 0), shape.get("cy", 0)
+                    pts = [tc(cx2 + r1*math.cos(2*math.pi*k/32),
+                              cy2 + r2*math.sin(2*math.pi*k/32)) for k in range(32)]
+                    polys.append(pts)
+                elif t == "poly":
+                    polys.append([tc(x, y) for x, y in shape["coords"]])
+            except Exception:
+                pass
+        return polys
+
+    # Draw letters
     for i, p in enumerate(placements):
-        pi   = p["piece"]
-        col, row = pi % COLS, pi // COLS
-        ox   = GAP + col * (PW + GAP)
-        oy   = GAP + row * (PH + GAP)
-        lx   = int(ox + p["x"] * scale)
-        ly   = int(oy + p["y"] * scale)
-        lw   = max(int(p["actual_w"] * scale), 4)
-        lh   = max(int(p["actual_h"] * scale), 4)
+        pi  = p["piece"]
+        col = pi % COLS
+        row = pi // COLS
+        ox  = GAP + col * (PW + GAP)
+        oy  = GAP + row * (PH + GAP)
         color = COLORS_PIL[i % len(COLORS_PIL)]
-        draw.rectangle([lx, ly, lx+lw, ly+lh], fill=color, outline="#1e1e2e", width=1)
-        if lw > 20 and lh > 10:
-            draw.text((lx + lw//2 - len(p["name"])*3, ly + lh//2 - 6),
-                      p["name"], fill="#1e1e2e")
+
+        polys = _shape_polygons(p, ox, oy)
+        if polys:
+            for pts in polys:
+                flat = [c for pt in pts for c in pt]
+                if len(flat) >= 6:
+                    draw.polygon(flat, fill=color, outline="#ffffff")
+        else:
+            # fallback: bounding box
+            lx = int(ox + p["x"] * scale)
+            ly = int(oy + p["y"] * scale)
+            lw = max(int(p["actual_w"] * scale), 4)
+            lh = max(int(p["actual_h"] * scale), 4)
+            draw.rectangle([lx, ly, lx+lw, ly+lh], fill=color, outline="#ffffff", width=1)
+
+        # Label
+        pcx = int(ox + (p["x"] + p["actual_w"]/2) * scale)
+        pcy = int(oy + (p["y"] + p["actual_h"]/2) * scale)
+        draw.text((pcx - len(p["name"])*3, pcy - 6), p["name"], fill="#ffffff")
+
     return img
 
 
@@ -1082,8 +1155,8 @@ def _pil_aluminum_image(letter_perims_cm, letter_names, strip_w, scale=3):
     sheets, col_x, col_y = [[]], 0.0, 0.0
     letter_colors = {}
     color_idx = 0
-    COLORS_PIL = ["#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#fab387",
-                  "#f9e2af","#94e2d5","#89dceb","#b4befe","#eba0ac"]
+    COLORS_PIL = ["#4f86c6","#e05c5c","#3aaa6a","#e07c3a","#8a5cd0",
+                  "#c45c8a","#3aaab4","#d4a017","#5c8ae0","#7a7a7a"]
 
     for perim, name in strips:
         if name not in letter_colors:
@@ -1104,164 +1177,338 @@ def _pil_aluminum_image(letter_perims_cm, letter_names, strip_w, scale=3):
     rows = math.ceil(n / COLS)
     W = COLS * (SW + GAP) + GAP
     H = rows * (SH + GAP) + GAP
-    img  = Image.new("RGB", (W, H), "#1e1e2e")
+    img  = Image.new("RGB", (W, H), "#f0f0f0")
     draw = ImageDraw.Draw(img)
 
     for si, sheet in enumerate(sheets):
         col, row = si % COLS, si // COLS
         ox = GAP + col * (SW + GAP)
         oy = GAP + row * (SH + GAP)
-        draw.rectangle([ox, oy, ox+SW, oy+SH], fill="#313244", outline="#585b70", width=2)
-        draw.text((ox+4, oy+4), f"Hoja {si+1}", fill="#888899")
+        draw.rectangle([ox, oy, ox+SW, oy+SH], fill="#ffffff", outline="#cccccc", width=2)
+        draw.text((ox+4, oy+4), f"Hoja {si+1}", fill="#aaaaaa")
         for (sx, sy, sw, sh, name, is_merma) in sheet:
-            color = "#444455" if is_merma else letter_colors.get(name, "#aaaaaa")
+            color = "#dddddd" if is_merma else letter_colors.get(name, "#aaaaaa")
             x1, y1 = ox+int(sx*scale), oy+int(sy*scale)
             x2, y2 = x1+max(int(sw*scale)-1,2), y1+max(int(sh*scale)-1,2)
-            draw.rectangle([x1, y1, x2, y2], fill=color, outline="#1e1e2e")
+            draw.rectangle([x1, y1, x2, y2], fill=color, outline="#ffffff")
             if (y2-y1) > 12 and not is_merma:
-                draw.text((x1+2, y1+2), name[:4], fill="#1e1e2e")
+                draw.text((x1+2, y1+2), name[:4], fill="#ffffff")
     return img
 
 
 def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     import io, datetime
-    from PIL import Image as PILImage
-    from reportlab.lib.pagesizes import letter as PAGE
+    from reportlab.lib.pagesizes import letter as RL_PAGE
     from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
                                     Table, TableStyle, HRFlowable, Image as RLImage,
                                     PageBreak)
     from reportlab.lib.styles import ParagraphStyle
+    from reportlab.pdfgen import canvas as rl_canvas
 
-    doc   = SimpleDocTemplate(output_path, pagesize=PAGE,
-                              leftMargin=2*cm, rightMargin=2*cm,
-                              topMargin=2*cm, bottomMargin=2*cm)
-    story = []
-    PAGE_W = PAGE[0] - 4*cm  # usable width in pts
+    PAGE = RL_PAGE
+    LM = RM = 2.0 * cm
+    TM = 2.2 * cm
+    BM = 1.8 * cm
+    PW = PAGE[0] - LM - RM
 
-    PURPLE = colors.HexColor("#7c3aed")
-    DARK   = colors.HexColor("#1e1e2e")
-    GRAY   = colors.HexColor("#6c7086")
-    GREEN  = colors.HexColor("#16a34a")
+    # ── Datos ─────────────────────────────────────────────────────────────
+    empresa   = r.get("empresa", {})
+    emp_nombre= empresa.get("nombre",   "Anuncios Luminosos LB")
+    emp_dom   = empresa.get("domicilio","")
+    emp_tel   = empresa.get("tel",      "")
+    emp_email = empresa.get("email",    "")
+    director  = empresa.get("director", "Ricardo Lobo Sáenz")
+    cargo     = empresa.get("cargo",    "Director general")
+    logo_path = empresa.get("logo",     "")
+    iva_pct   = empresa.get("iva_pct",  16.0)
+    isr_pct   = empresa.get("isr_pct",  1.25)
+    vigencia  = empresa.get("vigencia_dias", 30)
+    folio     = r.get("folio", 0)
 
-    T  = lambda txt, s: story.append(Paragraph(txt, s))
-    SP = lambda n=8: story.append(Spacer(1, n))
-    HR = lambda: story.append(HRFlowable(width="100%", color=PURPLE, thickness=1))
+    cliente   = r.get("cliente",         "")
+    emp_c     = r.get("empresa_cliente", "")
+    direccion = r.get("direccion",       "")
+    proyecto  = r.get("proyecto",        "")
+    desc_txt  = r.get("descripcion",     "")
 
-    title_s = ParagraphStyle("t", fontSize=18, textColor=PURPLE,
-                              spaceAfter=2, fontName="Helvetica-Bold")
-    sub_s   = ParagraphStyle("s", fontSize=10, textColor=GRAY, spaceAfter=10)
-    sec_s   = ParagraphStyle("h", fontSize=11, textColor=PURPLE,
-                              spaceBefore=12, spaceAfter=4, fontName="Helvetica-Bold")
-    img_title_s = ParagraphStyle("it", fontSize=10, textColor=DARK,
-                                  spaceBefore=14, spaceAfter=4, fontName="Helvetica-Bold")
+    today     = datetime.date.today()
+    today_s   = today.strftime("%d/%m/%Y")
+    _meses    = ["enero","febrero","marzo","abril","mayo","junio",
+                 "julio","agosto","septiembre","octubre","noviembre","diciembre"]
+    today_long = f"{today.day} de {_meses[today.month-1]} de {today.year}"
+    vence = (today + datetime.timedelta(days=vigencia)).strftime("%d/%m/%Y")
 
-    today = datetime.date.today().strftime("%d / %m / %Y")
-    T("Anuncios Luminosos LB", title_s)
-    T(f"Cotizacion — {today}", sub_s)
-    HR(); SP(10)
+    subtotal   = r.get("total", 0.0)
+    imp_neto   = subtotal * (iva_pct - isr_pct) / 100
+    total_gral = subtotal + imp_neto
 
     def money(v): return f"${v:,.2f}"
 
-    def tbl(rows, widths=None):
-        t = Table(rows, colWidths=widths or [11*cm, 5*cm])
-        t.setStyle(TableStyle([
-            ("FONTNAME",     (0,0),(-1,-1), "Helvetica"),
-            ("FONTSIZE",     (0,0),(-1,-1), 9),
-            ("TEXTCOLOR",    (0,0),(0,-1),  colors.HexColor("#374151")),
-            ("TEXTCOLOR",    (1,0),(1,-1),  DARK),
-            ("ALIGN",        (1,0),(1,-1),  "RIGHT"),
-            ("LINEBELOW",    (0,-1),(-1,-1),0.5, GRAY),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 3),
-            ("TOPPADDING",   (0,0),(-1,-1), 3),
-        ]))
-        story.append(t)
+    # ── Colors / styles ───────────────────────────────────────────────────
+    BLACK = colors.black
+    GRAY  = colors.HexColor("#595959")
+    LGRAY = colors.HexColor("#cccccc")
+    RED   = colors.HexColor("#cc0000")
 
-    def pil_to_rl(pil_img, max_w_pt):
+    def _s(name, **kw):
+        defaults = dict(fontName="Helvetica", fontSize=9, leading=13, textColor=BLACK)
+        defaults.update(kw)
+        return ParagraphStyle(name, **defaults)
+
+    s_norm    = _s("n")
+    s_small   = _s("sm",  fontSize=8,  leading=11, textColor=GRAY)
+    s_bold9   = _s("b9",  fontName="Helvetica-Bold")
+    s_bold10  = _s("b10", fontName="Helvetica-Bold", fontSize=10, leading=14)
+    s_bold12  = _s("b12", fontName="Helvetica-Bold", fontSize=12, leading=16)
+    s_bold14  = _s("b14", fontName="Helvetica-Bold", fontSize=14, leading=18)
+    s_right   = _s("r",   alignment=2)
+    s_right_b = _s("rb",  alignment=2, fontName="Helvetica-Bold", fontSize=10)
+    s_red     = _s("red", fontSize=8,  textColor=RED)
+    s_th      = _s("th",  fontName="Helvetica-Bold", fontSize=8,
+                          textColor=colors.black)
+
+    story = []
+    SP  = lambda n=6:  story.append(Spacer(1, n))
+    HR  = lambda c=LGRAY, t=0.5: story.append(HRFlowable(width="100%", color=c, thickness=t))
+
+    # ── Footer callback ────────────────────────────────────────────────────
+    footer_text = f"{emp_dom}     Página N° "
+
+    def _draw_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(GRAY)
+        y = BM * 0.55
+        canvas.drawString(LM, y, footer_text + str(doc.page))
+        canvas.restoreState()
+
+    # ── Header: logo + folio ──────────────────────────────────────────────
+    def _logo_cell():
+        if logo_path and os.path.isfile(logo_path):
+            try:
+                return RLImage(logo_path, width=3.5*cm, height=1.4*cm)
+            except Exception:
+                pass
+        return Paragraph(f"<b>{emp_nombre}</b>",
+                         _s("lg", fontName="Helvetica-Bold", fontSize=13))
+
+    folio_cell = Table([
+        [Paragraph(f"<b>Presupuesto N° {folio}</b>",
+                   _s("fo", fontName="Helvetica-Bold", fontSize=14, alignment=2))],
+        [Paragraph(today_long,  _s("fd", fontSize=8, textColor=GRAY, alignment=2))],
+        [Paragraph("Página 1 de 1", _s("fp", fontSize=8, textColor=GRAY, alignment=2))],
+    ], colWidths=[PW * 0.40])
+    folio_cell.setStyle(TableStyle([
+        ("ALIGN",  (0,0),(-1,-1), "RIGHT"),
+        ("VALIGN", (0,0),(-1,-1), "TOP"),
+        ("TOPPADDING",    (0,0),(-1,-1), 2),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 2),
+    ]))
+
+    header = Table([[_logo_cell(), Spacer(1,1), folio_cell]],
+                   colWidths=[PW*0.38, PW*0.22, PW*0.40])
+    header.setStyle(TableStyle([
+        ("VALIGN", (0,0),(-1,-1), "TOP"),
+        ("LEFTPADDING",  (0,0),(-1,-1), 0),
+        ("RIGHTPADDING", (0,0),(-1,-1), 0),
+    ]))
+    story.append(header)
+    SP(14)
+
+    # ── Bloque cliente ────────────────────────────────────────────────────
+    if cliente:
+        story.append(Paragraph(cliente, s_bold12))
+        SP(2)
+    if emp_c:
+        story.append(Paragraph(emp_c, s_bold10))
+        SP(2)
+    if direccion:
+        for line in direccion.split(","):
+            line = line.strip()
+            if line:
+                story.append(Paragraph(line, s_small))
+    SP(8)
+
+    if proyecto:
+        story.append(Paragraph(f"<b>Proyecto:</b> {proyecto}", s_bold9))
+    HR(BLACK, 0.8)
+    SP(8)
+
+    story.append(Paragraph(
+        "Tenemos el gusto de dirigirnos a usted para poner a su disposición el siguiente presupuesto.",
+        s_norm))
+    SP(10)
+
+    # ── Tabla de items ────────────────────────────────────────────────────
+    th_style = _s("th2", fontName="Helvetica-Bold", fontSize=8, textColor=BLACK)
+    hrow = [
+        Paragraph("DESCRIPCIÓN", th_style),
+        Paragraph("CANT.", _s("thc", fontName="Helvetica-Bold", fontSize=8, alignment=1)),
+        Paragraph("UNITARIO", _s("thr", fontName="Helvetica-Bold", fontSize=8, alignment=2)),
+        Paragraph("IMPORTE",  _s("thr2",fontName="Helvetica-Bold", fontSize=8, alignment=2)),
+    ]
+    items_rows = [hrow]
+
+    if desc_txt:
+        # Descripción libre ingresada por el usuario → una fila por párrafo
+        for block in desc_txt.split("\n\n"):
+            block = block.strip()
+            if block:
+                items_rows.append([
+                    Paragraph(block.replace("\n", "<br/>"), s_norm),
+                    Paragraph("1", _s("c1", alignment=1)),
+                    Paragraph(money(subtotal), s_right),
+                    Paragraph(money(subtotal), s_right),
+                ])
+    else:
+        # Sin descripción → mostrar desglose automático (solo conceptos con costo > 0)
+        def _row(desc, cant, unit, imp):
+            return [Paragraph(desc, s_norm),
+                    Paragraph(str(cant), _s("c1", alignment=1)),
+                    Paragraph(money(unit), s_right),
+                    Paragraph(money(imp),  s_right)]
+
+        cfg_p = r.get("precios", {})
+        if r.get("c_acrilico", 0):
+            items_rows.append(_row("Acrílico transparente (lám. 240×120 cm)",
+                f"{r['n_acrilico']:.3f}", cfg_p.get("acrilico_lamina",0), r["c_acrilico"]))
+        if r.get("c_pvc6", 0):
+            items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
+                f"{r['n_pvc6']:.3f}", cfg_p.get("pvc6_lamina",0), r["c_pvc6"]))
+        if r.get("c_aluminio", 0):
+            items_rows.append(_row("Aluminio calibre 22 (+20% merma)",
+                f"{r['n_aluminio']:.3f}", cfg_p.get("aluminio_lamina",0), r["c_aluminio"]))
+        if r.get("c_pvc2", 0):
+            items_rows.append(_row("PVC 2mm (+20% merma)",
+                f"{r['n_pvc2']:.3f}", cfg_p.get("pvc2_lamina",0), r["c_pvc2"]))
+        if r.get("c_leds", 0):
+            items_rows.append(_row("Tira LED 5m (rollo)",
+                r.get("n_rollos",0), cfg_p.get("led_rollo",0), r["c_leds"]))
+        if r.get("c_fuente", 0):
+            fu = r.get("fuente", {})
+            items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
+                1, r["c_fuente"], r["c_fuente"]))
+        if r.get("c_mano", 0):
+            items_rows.append(_row("Mano de obra (letras)",
+                r.get("n_letters",0), cfg_p.get("mano_obra_letra",0), r["c_mano"]))
+        if r.get("c_instalacion", 0):
+            items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
+        if r.get("c_fee", 0):
+            items_rows.append(_row("Fee / Comisión asociado", 1, r["c_fee"], r["c_fee"]))
+        if r.get("c_vinil", 0):
+            items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
+        if r.get("c_papel", 0):
+            pc2 = r.get("papel_cfg", {})
+            items_rows.append(_row(
+                f"Papel plantilla {pc2.get('ancho_cm',120)}×{pc2.get('alto_cm',60)} cm",
+                r.get("n_papel",0), pc2.get("precio",0), r["c_papel"]))
+        for bn, bv in r.get("basicos", []):
+            items_rows.append(_row(bn, 1, bv, bv))
+
+    cw = [PW*0.54, PW*0.09, PW*0.18, PW*0.19]
+    items_tbl = Table(items_rows, colWidths=cw, repeatRows=1)
+    n_rows = len(items_rows)
+    items_tbl.setStyle(TableStyle([
+        ("FONTNAME",      (0,0),(-1,-1), "Helvetica"),
+        ("FONTSIZE",      (0,0),(-1,-1), 9),
+        ("VALIGN",        (0,0),(-1,-1), "TOP"),
+        ("ALIGN",         (1,0),(-1,-1), "RIGHT"),
+        ("ALIGN",         (1,0),(1,-1),  "CENTER"),
+        ("TOPPADDING",    (0,0),(-1,-1), 5),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 5),
+        ("LEFTPADDING",   (0,0),(-1,-1), 4),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 4),
+        ("LINEBELOW",     (0,0),(-1,0),  0.6, BLACK),   # bajo header
+        ("LINEBELOW",     (0,n_rows-1),(-1,n_rows-1), 0.6, BLACK),  # bajo último
+        ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white, colors.HexColor("#f8f8f8")]),
+    ]))
+    story.append(items_tbl)
+    SP(6)
+
+    # ── Totales ───────────────────────────────────────────────────────────
+    tot_rows = [
+        [Paragraph("Sub Total:",       s_norm),  Paragraph(money(subtotal),  s_right)],
+        [Paragraph("Total Impuestos:", s_norm),  Paragraph(money(imp_neto),  s_right)],
+        [Paragraph("Total General:",   s_bold10),Paragraph(money(total_gral),s_right_b)],
+    ]
+    tot_tbl = Table(tot_rows, colWidths=[PW*0.78, PW*0.22])
+    tot_tbl.setStyle(TableStyle([
+        ("ALIGN",         (1,0),(-1,-1), "RIGHT"),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ("LINEABOVE",     (0,-1),(-1,-1), 0.6, BLACK),
+    ]))
+    story.append(tot_tbl)
+    SP(16)
+
+    # ── Condiciones ───────────────────────────────────────────────────────
+    story.append(Paragraph(
+        f"<b>Condiciones de pago:</b> 50% de anticipo y el resto a la entrega.", s_norm))
+    SP(3)
+    story.append(Paragraph(
+        f"<b>Tiempo de Entrega:</b> 7 días después de recibido el anticipo", s_norm))
+    SP(3)
+    story.append(Paragraph(
+        f"<b>Vigencia:</b> {vigencia} días. Vence el {vence}.", s_norm))
+    SP(3)
+    story.append(Paragraph("<b>Observaciones:</b>", s_norm))
+    SP(3)
+    story.append(Paragraph(
+        f"Los impuestos están calculados con el {iva_pct:.0f}% de IVA "
+        f"y un -{isr_pct:.2f}% de retención del ISR.", s_red))
+    SP(24)
+
+    # ── Firmas ────────────────────────────────────────────────────────────
+    line = "___________________________________"
+    sig = Table([
+        [Paragraph("Atentamente:", s_norm), Paragraph("Acepto:", s_norm),
+         Paragraph("Fecha:_____ / _____ / _____", s_norm)],
+        [Spacer(1, 22), Spacer(1, 22), Spacer(1, 22)],
+        [Paragraph(line, s_norm), Paragraph(line, s_norm), Paragraph("", s_norm)],
+        [Paragraph(f"<b>{director}</b><br/>{cargo}<br/>Tel.: {emp_tel}<br/>Email: {emp_email}",
+                   s_small),
+         Paragraph(cliente or "Cliente", s_small),
+         Paragraph("", s_norm)],
+    ], colWidths=[PW*0.38, PW*0.38, PW*0.24])
+    sig.setStyle(TableStyle([
+        ("VALIGN",  (0,0),(-1,-1), "TOP"),
+        ("TOPPADDING",    (0,0),(-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 3),
+        ("LEFTPADDING",   (0,0),(-1,-1), 0),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 6),
+    ]))
+    story.append(sig)
+
+    # ── Página 2: gráficos de nesting ─────────────────────────────────────
+    def pil_to_rl(pil_img, max_w):
         buf = io.BytesIO()
         pil_img.save(buf, format="PNG")
         buf.seek(0)
         ratio = pil_img.height / pil_img.width
-        w = min(max_w_pt, pil_img.width * 0.75)
-        return RLImage(buf, width=w, height=w * ratio)
+        w = min(max_w, pil_img.width * 0.75)
+        return RLImage(buf, width=w, height=w*ratio)
 
-    # ── Cotizacion ─────────────────────────────────────────────────────────
-    n_full = r.get("n_full", n_pieces); n_half = r.get("n_half", 0)
-    equiv  = n_full + n_half * 0.5
-    piezas_txt = f"{n_full} x 120x60 cm"
-    if n_half: piezas_txt += f" + {n_half} x 60x60 cm = {equiv:.1f} plantillas"
+    s_img = _s("img", fontName="Helvetica-Bold", fontSize=9, textColor=GRAY,
+               spaceBefore=10, spaceAfter=4)
 
-    T("Materiales", sec_s)
-    tbl([
-        ["Piezas acrilico / PVC 6mm", piezas_txt],
-        ["Acrilico 240x120",          f"{r['n_acrilico']:.3f} lam.  →  {money(r['c_acrilico'])}"],
-        ["PVC 6mm 240x120",           f"{r['n_pvc6']:.3f} lam.  →  {money(r['c_pvc6'])}"],
-        ["Aluminio (+20% merma)",      f"{r['n_aluminio']:.3f} lam.  →  {money(r['c_aluminio'])}"],
-        ["PVC 2mm (+20% merma)",       f"{r['n_pvc2']:.3f} lam.  →  {money(r['c_pvc2'])}"],
-    ])
-
-    T("Iluminacion", sec_s)
-    tbl([
-        ["Rollos LED 5m",             f"{r['n_rollos']}  →  {money(r['c_leds'])}"],
-        [f"Fuente {r['fuente']['watts']}W", money(r['c_fuente'])],
-    ])
-
-    T("Mano de obra e instalacion", sec_s)
-    tbl([
-        ["Letras",        str(r['n_letters'])],
-        ["Mano de obra",  money(r['c_mano'])],
-        ["Instalacion",   money(r['c_instalacion'])],
-        ["Fee asociado",  money(r['c_fee'])],
-    ])
-
-    pc = r.get("papel_cfg", {})
-    T("Papel plantilla", sec_s)
-    tbl([
-        ["Area del anuncio",
-         f"{r.get('sign_w_cm',0):.0f} x {r.get('sign_h_cm',0):.0f} cm"],
-        ["Pliegos necesarios",
-         f"{r.get('n_papel',0)}  ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
-         f"{money(r.get('c_papel',0))}"],
-    ])
-
-    T("Basicos", sec_s)
-    tbl([[n, money(p)] for n, p in r.get("basicos", [])] +
-        [["Total basicos", money(r['c_basicos_total'])]])
-
-    SP(14); HR()
-    tot_t = Table([["TOTAL", money(r['total'])]], colWidths=[11*cm, 5*cm])
-    tot_t.setStyle(TableStyle([
-        ("FONTNAME", (0,0),(-1,-1), "Helvetica-Bold"), ("FONTSIZE",(0,0),(-1,-1),14),
-        ("TEXTCOLOR",(1,0),(1,0), GREEN), ("ALIGN",(1,0),(1,0),"RIGHT"),
-        ("TOPPADDING",(0,0),(-1,-1),8),
-    ]))
-    story.append(tot_t)
-
-    # ── Graficos — nueva pagina, apilados verticalmente ────────────────────
     story.append(PageBreak())
-    T("Nesting — Acrilico / PVC 6mm", sec_s)
-    T("Cada color es una letra. Piezas 120x60 cm (full) o 60x60 cm (half).", img_title_s)
-    img_nest = _pil_nesting_image(placements, n_pieces, piece_sizes, scale=5)
-    story.append(pil_to_rl(img_nest, PAGE_W))
+    story.append(Paragraph("Nesting — Acrílico / PVC 6mm", s_img))
+    story.append(pil_to_rl(_pil_nesting_image(placements, n_pieces, piece_sizes, scale=5), PW))
+    SP(14)
+    story.append(Paragraph("Distribución — Aluminio (tiras 5 cm)", s_img))
+    story.append(pil_to_rl(_pil_aluminum_image(
+        r.get("letter_perims_cm",[]), r.get("letter_names",[]), strip_w=5.0, scale=2), PW))
+    SP(14)
+    story.append(Paragraph("Distribución — PVC 2mm (tiras 2 cm)", s_img))
+    story.append(pil_to_rl(_pil_aluminum_image(
+        r.get("letter_perims_cm",[]), r.get("letter_names",[]), strip_w=2.0, scale=2), PW))
 
-    SP(20)
-    T("Distribucion — Aluminio (tiras 5 cm)", sec_s)
-    T("Gris = merma 20%. Corte en eje 120 cm.", img_title_s)
-    img_al = _pil_aluminum_image(
-        r.get("letter_perims_cm", []), r.get("letter_names", []),
-        strip_w=5.0, scale=2)
-    story.append(pil_to_rl(img_al, PAGE_W))
-
-    SP(20)
-    T("Distribucion — PVC 2mm (tiras 2 cm)", sec_s)
-    T("Gris = merma 20%. Corte en eje 120 cm.", img_title_s)
-    img_pvc2 = _pil_aluminum_image(
-        r.get("letter_perims_cm", []), r.get("letter_names", []),
-        strip_w=2.0, scale=2)
-    story.append(pil_to_rl(img_pvc2, PAGE_W))
-
-    doc.build(story)
+    doc = SimpleDocTemplate(output_path, pagesize=PAGE,
+                            leftMargin=LM, rightMargin=RM,
+                            topMargin=TM, bottomMargin=BM)
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return output_path
 
 
@@ -1509,8 +1756,8 @@ def export_dxf(placements, n_pieces, output_folder):
 # ---------------------------------------------------------------------------
 # Nesting visualization window
 # ---------------------------------------------------------------------------
-COLORS = ["#cba6f7","#89b4fa","#a6e3a1","#f38ba8","#fab387",
-          "#f9e2af","#94e2d5","#89dceb","#b4befe","#eba0ac"]
+COLORS = ["#4f86c6","#e05c5c","#3aaa6a","#e07c3a","#8a5cd0",
+          "#c45c8a","#3aaab4","#d4a017","#5c8ae0","#7a7a7a"]
 
 class NestingWindow(tk.Toplevel):
     S         = 4.0    # canvas px per cm
@@ -1523,7 +1770,7 @@ class NestingWindow(tk.Toplevel):
                  vinil_prices=None):
         super().__init__(parent)
         self.title("Nesting de plantillas")
-        self.configure(bg="#1e1e2e")
+        self.configure(bg="#f5f5f5")
         self.resizable(True, True)
 
         self.n_pieces   = n_pieces
@@ -1552,60 +1799,66 @@ class NestingWindow(tk.Toplevel):
 
     # ── UI skeleton ────────────────────────────────────────────────────────
     def _build_ui(self):
-        top = tk.Frame(self, bg="#1e1e2e")
+        NW_BG  = "#f5f5f5"
+        NW_BG2 = "#e8e8e8"
+        NW_FG  = "#1a1a1a"
+        NW_FG2 = "#666666"
+        NW_ACC = "#111111"
+
+        top = tk.Frame(self, bg=NW_BG)
         top.pack(fill="x", padx=10, pady=(10, 0))
 
-        self.hdr = tk.Label(top, text="", bg="#1e1e2e", fg="#cba6f7",
+        self.hdr = tk.Label(top, text="", bg=NW_BG, fg=NW_ACC,
                              font=("Segoe UI", 11, "bold"))
         self.hdr.pack(side="left")
 
         # Rotation input (visible when letter selected)
         self._angle_var = tk.StringVar(value="0")
-        rot_frame = tk.Frame(top, bg="#1e1e2e")
+        rot_frame = tk.Frame(top, bg=NW_BG)
         rot_frame.pack(side="left", padx=16)
-        tk.Label(rot_frame, text="Angulo:", bg="#1e1e2e", fg="#a6adc8",
+        tk.Label(rot_frame, text="Angulo:", bg=NW_BG, fg=NW_FG2,
                  font=("Segoe UI", 9)).pack(side="left")
         self._angle_entry = tk.Entry(rot_frame, textvariable=self._angle_var,
-                                     width=6, bg="#313244", fg="#cdd6f4",
+                                     width=6, bg=NW_BG2, fg=NW_FG,
                                      font=("Segoe UI", 10), relief="flat")
         self._angle_entry.pack(side="left", padx=4)
-        tk.Label(rot_frame, text="°", bg="#1e1e2e", fg="#a6adc8",
+        tk.Label(rot_frame, text="°", bg=NW_BG, fg=NW_FG2,
                  font=("Segoe UI", 9)).pack(side="left")
-        tk.Button(rot_frame, text="-15", bg="#313244", fg="#cdd6f4",
+        tk.Button(rot_frame, text="-15", bg=NW_BG2, fg=NW_FG,
                   relief="flat", font=("Segoe UI", 8), cursor="hand2",
                   command=lambda: self._rotate_by(-15)).pack(side="left", padx=2)
-        tk.Button(rot_frame, text="+15", bg="#313244", fg="#cdd6f4",
+        tk.Button(rot_frame, text="+15", bg=NW_BG2, fg=NW_FG,
                   relief="flat", font=("Segoe UI", 8), cursor="hand2",
                   command=lambda: self._rotate_by(15)).pack(side="left", padx=2)
         self._angle_entry.bind("<Return>", self._on_angle_enter)
         self._angle_entry.bind("<FocusOut>", self._on_angle_enter)
 
-        tk.Label(top, bg="#1e1e2e", fg="#6c7086", font=("Segoe UI", 9),
+        tk.Label(top, bg=NW_BG, fg=NW_FG2, font=("Segoe UI", 9),
                  text="  Click: seleccionar  │  R: rotar  │  ←→: cambiar pieza  │  Arrastrar: mover"
                  ).pack(side="left")
 
         self.del_btn = tk.Button(top, text="× Eliminar última pieza",
-                                  bg="#313244", fg="#f38ba8", relief="flat",
+                                  bg=NW_BG2, fg="#c0392b", relief="flat",
                                   font=("Segoe UI", 9), cursor="hand2",
                                   command=self._del_last_piece)
         self.del_btn.pack(side="right", padx=(4,0))
-        tk.Button(top, text="+ 240x120", bg="#313244", fg="#a6e3a1",
+        tk.Button(top, text="+ 240x120", bg=NW_BG2, fg="#27ae60",
                   relief="flat", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("xl")).pack(side="right", padx=2)
-        tk.Button(top, text="+ 120x60", bg="#313244", fg="#a6e3a1",
+        tk.Button(top, text="+ 120x60", bg=NW_BG2, fg="#27ae60",
                   relief="flat", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("full")).pack(side="right", padx=2)
-        tk.Button(top, text="+ 60x60", bg="#313244", fg="#a6e3a1",
+        tk.Button(top, text="+ 60x60", bg=NW_BG2, fg="#27ae60",
                   relief="flat", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("half")).pack(side="right", padx=2)
-        tk.Button(top, text="Exportar…", bg="#cba6f7", fg="#1e1e2e",
+        tk.Button(top, text="Exportar…", bg=NW_ACC, fg="#ffffff",
                   relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2",
                   command=self._export).pack(side="right", padx=8)
 
-        cf = tk.Frame(self, bg="#1e1e2e")
+        cf = tk.Frame(self, bg=NW_BG)
         cf.pack(fill="both", expand=True, padx=10, pady=10)
 
-        self.cv = tk.Canvas(cf, bg="#181825", width=1200, height=500)
+        self.cv = tk.Canvas(cf, bg="#ffffff", width=1200, height=500)
         vsb = tk.Scrollbar(cf, orient="vertical",   command=self.cv.yview)
         hsb = tk.Scrollbar(cf, orient="horizontal", command=self.cv.xview)
         self.cv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -1704,18 +1957,18 @@ class NestingWindow(tk.Toplevel):
                 self.piece_sizes.get(pi, "full"), "120x60")
             empty = not any(p["piece"] == pi for p in self.placements)
             self.cv.create_rectangle(ox, oy, ox+pw, oy+ph,
-                fill="#2a2a3e" if empty else "#313244",
-                outline="#585b70", width=2)
+                fill="#f8f8f8" if empty else "#ffffff",
+                outline="#cccccc", width=2)
             toggle_tag = f"toggle_{pi}"
             self.cv.create_text(ox+6, oy+6, anchor="nw",
                 text=f"P{pi+1} ({size_lbl})  [click para cambiar]",
-                fill="#6c7086", font=("Segoe UI", 8), tags=toggle_tag)
+                fill="#aaaaaa", font=("Segoe UI", 8), tags=toggle_tag)
             # invisible hit area for the toggle
             self.cv.create_rectangle(ox, oy, ox+pw, oy+18,
                 fill="", outline="", tags=(toggle_tag, "piece_toggle"))
             m = PIECE_MARGIN * S
             self.cv.create_rectangle(ox+m, oy+m, ox+pw-m, oy+ph-m,
-                outline="#404055", width=1, dash=(3,3))
+                outline="#dddddd", width=1, dash=(3,3))
             # Registration marks at the 4 corners
             _draw_reg_marks_canvas(self.cv, ox, oy, pw, ph)
 
@@ -1728,10 +1981,10 @@ class NestingWindow(tk.Toplevel):
                 while g_y < ph_cm - 0.1:
                     gy_px = oy + int(g_y * S)
                     self.cv.create_line(ox, gy_px, ox + pw, gy_px,
-                                        fill="#89b4fa", width=1, dash=(6, 3))
+                                        fill="#4f86c6", width=1, dash=(6, 3))
                     self.cv.create_text(ox + pw - 4, gy_px - 5, anchor="e",
                                         text=f"— {g_y:.0f} cm —",
-                                        fill="#89b4fa", font=("Segoe UI", 7))
+                                        fill="#4f86c6", font=("Segoe UI", 7))
                     sec += 1
                     g_y += g_step
 
@@ -1755,18 +2008,18 @@ class NestingWindow(tk.Toplevel):
                     self.piece_options[pi]["vinil"].set(False)
                 self._notify()
 
-            cb_frame = tk.Frame(self.cv, bg="#1e1e2e", bd=0)
+            cb_frame = tk.Frame(self.cv, bg="#f5f5f5", bd=0)
             tk.Checkbutton(cb_frame, text="Vinil",
                            variable=opts["vinil"],
                            command=_on_vinil,
-                           bg="#1e1e2e", fg="#cdd6f4",
-                           selectcolor="#313244", activebackground="#1e1e2e",
+                           bg="#f5f5f5", fg="#1a1a1a",
+                           selectcolor="#e8e8e8", activebackground="#f5f5f5",
                            font=("Segoe UI", 8), cursor="hand2").pack(anchor="w")
             tk.Checkbutton(cb_frame, text="Vinil con transfer",
                            variable=opts["transfer"],
                            command=_on_transfer,
-                           bg="#1e1e2e", fg="#cdd6f4",
-                           selectcolor="#313244", activebackground="#1e1e2e",
+                           bg="#f5f5f5", fg="#1a1a1a",
+                           selectcolor="#e8e8e8", activebackground="#f5f5f5",
                            font=("Segoe UI", 8), cursor="hand2").pack(anchor="w")
             wid = self.cv.create_window(ox + pw + 8, oy + 6,
                                          anchor="nw", window=cb_frame)
@@ -1786,7 +2039,7 @@ class NestingWindow(tk.Toplevel):
         ox, oy = self._piece_origin(p["piece"])
         tag = f"pl_{idx}"
         color   = COLORS[idx % len(COLORS)]
-        outline = "#ffffff" if selected else "#1e1e2e"
+        outline = "#111111" if selected else "#ffffff"
         width   = 2        if selected else 1
 
         bx0, by0   = p.get("bbox_origin",  (0, 0))
@@ -2111,7 +2364,7 @@ class AluminumWindow(tk.Toplevel):
                  strip_w=5.0, title="Aluminio"):
         super().__init__(parent)
         self.title(f"Distribucion de {title}")
-        self.configure(bg="#1e1e2e")
+        self.configure(bg="#f5f5f5")
         self.resizable(True, True)
         self.STRIP_W = strip_w
         self._build(letter_perims_cm, letter_names, n_sheets)
@@ -2182,14 +2435,14 @@ class AluminumWindow(tk.Toplevel):
         ch = 50 + PAD + rows * SH + PAD
 
         header = tk.Label(
-            self, bg="#1e1e2e", fg="#fab387", font=("Segoe UI", 11, "bold"),
+            self, bg="#f5f5f5", fg="#1a1a1a", font=("Segoe UI", 11, "bold"),
             text=f"{n} hojas 240x120 cm  |  tiras {self.STRIP_W} cm x max 120 cm  "
                  f"|  gris = merma 20%")
         header.pack(padx=10, pady=(10, 0), anchor="w")
 
-        frame = tk.Frame(self, bg="#1e1e2e")
+        frame = tk.Frame(self, bg="#f5f5f5")
         frame.pack(fill="both", expand=True, padx=10, pady=10)
-        cv = tk.Canvas(frame, bg="#181825",
+        cv = tk.Canvas(frame, bg="#ffffff",
                        width=min(cw, 1200), height=min(ch, 700),
                        scrollregion=(0, 0, cw, ch))
         vsb = tk.Scrollbar(frame, orient="vertical",   command=cv.yview)
@@ -2201,7 +2454,7 @@ class AluminumWindow(tk.Toplevel):
 
         # Axis labels
         cv.create_text(PAD + SW//2, 14, text="← 240 cm →",
-                       fill="#6c7086", font=("Segoe UI", 8))
+                       fill="#aaaaaa", font=("Segoe UI", 8))
 
         for si, sheet in enumerate(sheets):
             col = si % COLS
@@ -2211,9 +2464,9 @@ class AluminumWindow(tk.Toplevel):
 
             # Sheet background
             cv.create_rectangle(ox, oy, ox+SW, oy+SH,
-                                 fill="#313244", outline="#585b70", width=2)
+                                 fill="#f8f8f8", outline="#cccccc", width=2)
             cv.create_text(ox+6, oy+5, anchor="nw",
-                           text=f"Hoja {si+1}", fill="#6c7086",
+                           text=f"Hoja {si+1}", fill="#aaaaaa",
                            font=("Segoe UI", 8))
 
             # Column guides (every STRIP_W)
@@ -2221,19 +2474,19 @@ class AluminumWindow(tk.Toplevel):
             for ci in range(1, cols_n):
                 lx = ox + ci * self.STRIP_W * S
                 cv.create_line(lx, oy, lx, oy+SH,
-                               fill="#404055", width=1)
+                               fill="#e0e0e0", width=1)
 
             # Draw strips
             for (sx, sy, sw, sh, sname, is_merma) in sheet:
                 if is_merma:
-                    color   = "#444455"
-                    outline = "#555566"
-                    txt_col = "#888899"
+                    color   = "#dddddd"
+                    outline = "#cccccc"
+                    txt_col = "#aaaaaa"
                 else:
                     cidx    = letter_colors.get(sname, 0)
                     color   = COLORS[cidx % len(COLORS)]
-                    outline = "#1e1e2e"
-                    txt_col = "#1e1e2e"
+                    outline = "#ffffff"
+                    txt_col = "#ffffff"
                 x1 = ox + sx * S
                 y1 = oy + sy * S
                 x2 = x1 + sw * S
@@ -2375,7 +2628,7 @@ class PaperWindow(tk.Toplevel):
                  letter_bboxes_cm=None):
         super().__init__(parent)
         self.title("Plantilla de papel")
-        self.configure(bg="#1e1e2e")
+        self.configure(bg="#f5f5f5")
         self.resizable(True, True)
         self._sign_w   = sign_w_cm
         self._sign_h   = sign_h_cm
@@ -2414,10 +2667,10 @@ class PaperWindow(tk.Toplevel):
         logo_off_y = (total_h - sign_h) / 2   # cm
 
         # ── header ────────────────────────────────────────────────────────
-        hdr_row = tk.Frame(self, bg="#1e1e2e")
+        hdr_row = tk.Frame(self, bg="#f5f5f5")
         hdr_row.pack(fill="x", padx=10, pady=(10, 0))
         tk.Label(
-            hdr_row, bg="#1e1e2e", fg="#fab387", font=("Segoe UI", 11, "bold"),
+            hdr_row, bg="#f5f5f5", fg="#1a1a1a", font=("Segoe UI", 11, "bold"),
             text=(f"{n_real} pliegos {pw:.0f}×{ph:.0f} cm  │  "
                   f"anuncio {sign_w:.1f}×{sign_h:.1f} cm  │  "
                   f"centrado en {total_w:.0f}×{total_h:.0f} cm")
@@ -2433,20 +2686,20 @@ class PaperWindow(tk.Toplevel):
             messagebox.showinfo("Exportado",
                 f"{len(files)} archivo(s) SVG guardados en:\n{folder}")
 
-        tk.Button(hdr_row, text="Exportar SVG…", bg="#cba6f7", fg="#1e1e2e",
+        tk.Button(hdr_row, text="Exportar SVG…", bg="#111111", fg="#ffffff",
                   relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2",
                   command=_do_export).pack(side="right", padx=(8, 0))
 
         tk.Label(
-            self, bg="#1e1e2e", fg="#6c7086", font=("Segoe UI", 9),
+            self, bg="#f5f5f5", fg="#666666", font=("Segoe UI", 9),
             text="Plantillas completas 120×60 cm. El anuncio está centrado. "
                  "Imprime a escala 1:1 y únelos con cinta."
         ).pack(padx=10, pady=(0, 4), anchor="w")
 
         # ── canvas ────────────────────────────────────────────────────────
-        frame = tk.Frame(self, bg="#1e1e2e")
+        frame = tk.Frame(self, bg="#f5f5f5")
         frame.pack(fill="both", expand=True, padx=10, pady=10)
-        cv = tk.Canvas(frame, bg="#181825",
+        cv = tk.Canvas(frame, bg="#ffffff",
                        width=min(cw, 1200), height=min(ch, 700),
                        scrollregion=(0, 0, cw, ch))
         vsb = tk.Scrollbar(frame, orient="vertical",   command=cv.yview)
@@ -2468,11 +2721,11 @@ class PaperWindow(tk.Toplevel):
                 sw = int(pw * S)
                 sh = int(ph * S)
                 cv.create_rectangle(sx, sy, sx + sw, sy + sh,
-                                    fill="#2a2a3e", outline="#585b70", width=2)
+                                    fill="#f8f8f8", outline="#cccccc", width=2)
                 # Sheet label (small, top-left of each sheet)
                 lbl = f"P{r * cols_n + c + 1}  {pw:.0f}×{ph:.0f} cm"
                 cv.create_text(sx + 6, sy + 6, anchor="nw", text=lbl,
-                               fill="#585b70", font=("Segoe UI", 7))
+                               fill="#aaaaaa", font=("Segoe UI", 7))
 
         # ── letters (actual shapes, offset to logo position) ──────────────
         # logo_ox/oy = canvas px origin of sign content
@@ -2484,14 +2737,14 @@ class PaperWindow(tk.Toplevel):
             shapes = lb.get("shapes", [])
             if shapes:
                 _draw_shapes_on_canvas(cv, shapes, S, logo_ox, logo_oy,
-                                       fill=color, outline="#1e1e2e")
+                                       fill=color, outline="#ffffff")
             else:
                 lx = logo_ox + int(lb["x"] * S)
                 ly = logo_oy + int(lb["y"] * S)
                 lw = max(4, int(lb["w"] * S))
                 lh = max(4, int(lb["h"] * S))
                 cv.create_rectangle(lx, ly, lx + lw, ly + lh,
-                                    fill=color, outline="#1e1e2e", width=1)
+                                    fill=color, outline="#ffffff", width=1)
             # Name label at center of letter bbox
             lx     = logo_ox + int((lb["x"] + lb["w"] / 2) * S)
             ly     = logo_oy + int((lb["y"] + lb["h"] / 2) * S)
@@ -2499,45 +2752,45 @@ class PaperWindow(tk.Toplevel):
             lh_px  = max(4, int(lb["h"] * S))
             if lw_px > 16 and lh_px > 10:
                 cv.create_text(lx, ly, text=lb["name"],
-                               fill="#1e1e2e", font=("Segoe UI", 8, "bold"),
+                               fill="#ffffff", font=("Segoe UI", 8, "bold"),
                                width=lw_px - 4)
 
         # ── sign bounding-box outline (blue) ──────────────────────────────
         cv.create_rectangle(
             logo_ox, logo_oy,
             logo_ox + int(sign_w * S), logo_oy + int(sign_h * S),
-            fill="", outline="#89b4fa", width=2)
+            fill="", outline="#4f86c6", width=2)
 
         # ── sheet grid lines (over everything) ────────────────────────────
         for c in range(1, cols_n):
             lx = ox + int(c * pw * S)
             cv.create_line(lx, oy, lx, oy + total_h_px,
-                           fill="#f9e2af", width=2, dash=(8, 4))
+                           fill="#e07c3a", width=2, dash=(8, 4))
         for r in range(1, rows_n):
             ly = oy + int(r * ph * S)
             cv.create_line(ox, ly, ox + total_w_px, ly,
-                           fill="#f9e2af", width=2, dash=(8, 4))
+                           fill="#e07c3a", width=2, dash=(8, 4))
 
         # ── column width labels (below grid) ─────────────────────────────
         for c in range(cols_n):
             mid_x = ox + int((c + 0.5) * pw * S)
             cv.create_text(mid_x, oy + total_h_px + 10,
                            text=f"{pw:.0f} cm",
-                           fill="#6c7086", font=("Segoe UI", 7))
+                           fill="#aaaaaa", font=("Segoe UI", 7))
 
         # ── row height labels (left of grid) ─────────────────────────────
         for r in range(rows_n):
             mid_y = oy + int((r + 0.5) * ph * S)
             cv.create_text(ox - 8, mid_y,
                            text=f"{ph:.0f} cm",
-                           fill="#6c7086", font=("Segoe UI", 7), anchor="e")
+                           fill="#aaaaaa", font=("Segoe UI", 7), anchor="e")
 
 
 class SettingsWindow(tk.Toplevel):
-    BG  = "#1e1e2e"
-    BG2 = "#313244"
-    FG  = "#cdd6f4"
-    ACC = "#cba6f7"
+    BG  = "#f5f5f5"
+    BG2 = "#e8e8e8"
+    FG  = "#1a1a1a"
+    ACC = "#111111"
 
     def __init__(self, parent, cfg, on_save):
         super().__init__(parent)
@@ -2562,7 +2815,7 @@ class SettingsWindow(tk.Toplevel):
         return e, var
 
     def _sep(self, parent):
-        tk.Frame(parent, bg="#45475a", height=1).pack(fill="x", pady=6)
+        tk.Frame(parent, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
     # ── main layout ────────────────────────────────────────────────────────
     def _build(self):
@@ -2574,7 +2827,7 @@ class SettingsWindow(tk.Toplevel):
         s.configure("TNotebook",        background=self.BG, borderwidth=0)
         s.configure("TNotebook.Tab",    background=self.BG2, foreground=self.FG,
                                          padding=[10, 4])
-        s.map("TNotebook.Tab",          background=[("selected", "#45475a")])
+        s.map("TNotebook.Tab",          background=[("selected", "#cccccc")])
 
         t1 = tk.Frame(nb, bg=self.BG); nb.add(t1, text="  Materiales  ")
         t2 = tk.Frame(nb, bg=self.BG); nb.add(t2, text="  Vinil  ")
@@ -2588,7 +2841,7 @@ class SettingsWindow(tk.Toplevel):
         self._tab_basicos(t4)
         self._tab_fuentes(t5)
 
-        tk.Button(self, text="  Guardar  ", bg=self.ACC, fg=self.BG,
+        tk.Button(self, text="  Guardar  ", bg=self.ACC, fg="#ffffff",
                   relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2",
                   command=self._save).pack(pady=(0, 14))
 
@@ -2761,8 +3014,9 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Anuncios Luminosos LB")
-        self.resizable(False, False)
-        self.configure(bg="#1e1e2e")
+        self.resizable(True, True)
+        self.minsize(480, 400)
+        self.configure(bg="#111111")
 
         self.cfg = load_config()
         self.svg_w_px = None
@@ -2782,54 +3036,141 @@ class App(tk.Tk):
     def _build(self):
         s = ttk.Style(self)
         s.theme_use("clam")
-        s.configure(".", background="#1e1e2e", foreground="#cdd6f4", font=("Segoe UI", 10))
-        s.configure("TFrame", background="#1e1e2e")
-        s.configure("TLabel", background="#1e1e2e", foreground="#cdd6f4")
-        s.configure("Header.TLabel", font=("Segoe UI", 13, "bold"), foreground="#cba6f7")
-        s.configure("TEntry", fieldbackground="#313244", foreground="#cdd6f4")
-        s.configure("TButton", background="#585b70", foreground="#cdd6f4", padding=6)
-        s.map("TButton", background=[("active", "#7f849c")])
-        s.configure("Accent.TButton", background="#cba6f7", foreground="#1e1e2e")
-        s.map("Accent.TButton", background=[("active", "#b4befe")])
-        s.configure("Result.TLabel", background="#181825", foreground="#cdd6f4")
-        s.configure("Total.TLabel", background="#181825", foreground="#a6e3a1",
+        BG   = "#111111"   # panel izquierdo
+        BG2  = "#f5f5f5"   # panel derecho / resultados
+        BG3  = "#222222"   # inputs en panel izq
+        FG   = "#ffffff"   # texto en panel izq
+        FG2  = "#888888"   # labels secundarios panel izq
+        FGR  = "#1a1a1a"   # texto en panel derecho
+        FGR2 = "#666666"   # texto secundario panel derecho
+        DIVL = "#2a2a2a"   # divisor panel izq
+        DIVR = "#dddddd"   # divisor panel der
+
+        s.configure(".", background=BG2, foreground=FGR, font=("Segoe UI", 10))
+        s.configure("TFrame", background=BG2)
+        s.configure("TLabel", background=BG2, foreground=FGR)
+        s.configure("Header.TLabel", font=("Segoe UI", 13, "bold"), foreground=FGR)
+        s.configure("TEntry", fieldbackground="#ffffff", foreground=FGR)
+        s.configure("TButton", background="#e0e0e0", foreground=FGR, padding=[10,5])
+        s.map("TButton", background=[("active", "#cccccc")])
+        s.configure("Accent.TButton", background=FGR, foreground="#ffffff", padding=[10,5])
+        s.map("Accent.TButton", background=[("active", "#333333")])
+        s.configure("Result.TLabel", background=BG2, foreground=FGR)
+        s.configure("Total.TLabel",  background=BG2, foreground="#1a1a1a",
                     font=("Segoe UI", 13, "bold"))
 
-        main = ttk.Frame(self, padding=20)
-        main.grid(row=0, column=0)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=0)   # panel izq fijo
+        self.grid_columnconfigure(1, weight=1)   # panel der crece
 
-        ttk.Label(main, text="Anuncios Luminosos LB", style="Header.TLabel").grid(
-            row=0, column=0, columnspan=3, pady=(0, 16), sticky="w"
-        )
+        # ══ Panel izquierdo — formulario ══════════════════════════════════
+        left = tk.Frame(self, bg=BG, padx=22, pady=22)
+        left.grid(row=0, column=0, sticky="ns")
 
-        # File row
-        ttk.Label(main, text="Archivo SVG:").grid(row=1, column=0, sticky="w", pady=4)
-        ttk.Entry(main, textvariable=self.svg_path, width=38, state="readonly").grid(
-            row=1, column=1, padx=8
-        )
-        ttk.Button(main, text="Abrir…", command=self._open_file).grid(row=1, column=2)
+        # Logo / título
+        tk.Label(left, text="L+B", bg=BG, fg=FG,
+                 font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(left, text="Anuncios Luminosos", bg=BG, fg=FG2,
+                 font=("Segoe UI", 9)).pack(anchor="w")
 
-        # Width
-        ttk.Label(main, text="Ancho real del anuncio (cm):").grid(
-            row=2, column=0, sticky="w", pady=4
-        )
+        tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
+
+        # ── SVG ───────────────────────────────────────────────────────────
+        self._section_label(left, "ARCHIVO")
+        svg_row = tk.Frame(left, bg=BG)
+        svg_row.pack(fill="x", pady=(4, 0))
+        tk.Entry(svg_row, textvariable=self.svg_path, state="readonly",
+                 bg=BG3, fg=FG2, relief="flat", font=("Segoe UI", 8),
+                 width=20, insertbackground=FG
+                 ).pack(side="left", ipady=5, padx=(0, 6))
+        tk.Button(svg_row, text="Abrir", bg="#ffffff", fg="#111111", relief="flat",
+                  font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=4,
+                  command=self._open_file).pack(side="left")
+
+        tk.Frame(left, bg=BG, height=10).pack()
+        tk.Label(left, text="Ancho real (cm)", bg=BG, fg=FG2,
+                 font=("Segoe UI", 8)).pack(anchor="w")
         self.width_var = tk.StringVar()
-        ttk.Entry(main, textvariable=self.width_var, width=12).grid(
-            row=2, column=1, sticky="w", padx=8
-        )
+        tk.Entry(left, textvariable=self.width_var,
+                 bg=BG3, fg=FG, relief="flat", font=("Segoe UI", 10),
+                 width=10, insertbackground=FG).pack(anchor="w", ipady=5, pady=(3, 0))
 
-        # Buttons
-        btn_frame = ttk.Frame(main)
-        btn_frame.grid(row=3, column=0, columnspan=3, pady=14, sticky="w")
-        ttk.Button(btn_frame, text="Calcular cotización", style="Accent.TButton",
-                   command=self._calcular).pack(side="left", padx=(0, 8))
-        ttk.Button(btn_frame, text="⚙ Precios", command=self._settings).pack(side="left")
+        tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
-        # Results frame
-        res = tk.Frame(main, bg="#181825", padx=16, pady=14)
-        res.grid(row=4, column=0, columnspan=3, sticky="ew")
+        # ── Cliente ───────────────────────────────────────────────────────
+        self._section_label(left, "PRESUPUESTO")
+        campos = [
+            ("Cliente",    self.cliente_var),
+            ("Empresa",    self.empresa_c_var),
+            ("Dirección",  self.direccion_var),
+            ("Proyecto",   self.proyecto_var),
+        ]
+        for lbl, var in campos:
+            tk.Label(left, text=lbl, bg=BG, fg=FG2,
+                     font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
+            tk.Entry(left, textvariable=var, bg=BG3, fg=FG, relief="flat",
+                     font=("Segoe UI", 9), width=26,
+                     insertbackground=FG).pack(anchor="w", ipady=5, pady=(2, 0))
+
+        tk.Label(left, text="Descripción", bg=BG, fg=FG2,
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
+        desc_frame = tk.Frame(left, bg=BG3)
+        desc_frame.pack(fill="x", pady=(2, 0))
+        self.desc_text = tk.Text(desc_frame, width=26, height=4,
+                                 bg=BG3, fg=FG, insertbackground=FG,
+                                 font=("Segoe UI", 9), relief="flat", wrap="word",
+                                 padx=6, pady=6)
+        self.desc_text.pack(fill="both")
+
+        tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
+
+        # ── Botones acción ────────────────────────────────────────────────
+        tk.Button(left, text="Calcular cotización",
+                  bg="#ffffff", fg="#111111", relief="flat",
+                  font=("Segoe UI", 10, "bold"), cursor="hand2",
+                  padx=12, pady=8, command=self._calcular
+                  ).pack(fill="x")
+        tk.Frame(left, bg=BG, height=6).pack()
+        tk.Button(left, text="⚙  Configuración",
+                  bg=BG3, fg=FG2, relief="flat",
+                  font=("Segoe UI", 9), cursor="hand2",
+                  padx=10, pady=6, command=self._settings
+                  ).pack(fill="x")
+
+        # ══ Panel derecho — resultados scrollables ════════════════════════
+        right = tk.Frame(self, bg=BG2)
+        right.grid(row=0, column=1, sticky="nsew")
+        right.grid_rowconfigure(0, weight=1)
+        right.grid_columnconfigure(0, weight=1)
+
+        self._res_canvas = tk.Canvas(right, bg=BG2, highlightthickness=0)
+        self._res_canvas.grid(row=0, column=0, sticky="nsew")
+
+        vsb = tk.Scrollbar(right, orient="vertical",
+                           command=self._res_canvas.yview)
+        vsb.grid(row=0, column=1, sticky="ns")
+        self._res_canvas.configure(yscrollcommand=vsb.set)
+
+        res = tk.Frame(self._res_canvas, bg=BG2, padx=24, pady=24)
+        self._res_window = self._res_canvas.create_window(
+            (0, 0), window=res, anchor="nw")
+
+        res.bind("<Configure>",
+                 lambda e: self._res_canvas.configure(
+                     scrollregion=self._res_canvas.bbox("all")))
+        self._res_canvas.bind("<Configure>",
+                              lambda e: self._res_canvas.itemconfig(
+                                  self._res_window, width=e.width))
+        self._res_canvas.bind_all(
+            "<MouseWheel>",
+            lambda e: self._res_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
         self.res_frame = res
         self._result_placeholder()
+
+    def _section_label(self, parent, text):
+        tk.Label(parent, text=text, bg="#111111", fg="#555555",
+                 font=("Segoe UI", 7, "bold")).pack(anchor="w")
 
     def _result_placeholder(self):
         for w in self.res_frame.winfo_children():
@@ -2837,8 +3178,8 @@ class App(tk.Tk):
         tk.Label(
             self.res_frame,
             text="Abre un archivo SVG e ingresa el ancho real para cotizar.",
-            bg="#181825", fg="#6c7086", font=("Segoe UI", 10, "italic")
-        ).pack()
+            bg="#f5f5f5", fg="#aaaaaa", font=("Segoe UI", 10, "italic")
+        ).pack(pady=40)
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -2866,7 +3207,7 @@ class App(tk.Tk):
     def _show_info(self, msg):
         for w in self.res_frame.winfo_children():
             w.destroy()
-        tk.Label(self.res_frame, text=msg, bg="#181825", fg="#89b4fa",
+        tk.Label(self.res_frame, text=msg, bg="#f5f5f5", fg="#4f86c6",
                  font=("Segoe UI", 10)).pack(anchor="w")
 
     def _calcular(self):
@@ -2913,24 +3254,24 @@ class App(tk.Tk):
         for w in self.res_frame.winfo_children():
             w.destroy()
 
-        bg = "#181825"
-        fg = "#cdd6f4"
-        fg2 = "#a6adc8"
-        acc = "#cba6f7"
+        bg  = "#f5f5f5"
+        fg  = "#1a1a1a"
+        fg2 = "#666666"
+        acc = "#1a1a1a"
 
         def row(label, value, color=fg):
             f = tk.Frame(self.res_frame, bg=bg)
-            f.pack(fill="x", pady=1)
+            f.pack(fill="x", pady=2)
             tk.Label(f, text=label, bg=bg, fg=fg2, width=36, anchor="w",
                      font=("Segoe UI", 10)).pack(side="left")
             tk.Label(f, text=value, bg=bg, fg=color,
                      font=("Segoe UI", 10, "bold")).pack(side="left")
 
         def sep():
-            tk.Frame(self.res_frame, bg="#313244", height=1).pack(fill="x", pady=4)
+            tk.Frame(self.res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
-        tk.Label(self.res_frame, text="COTIZACIÓN", bg=bg, fg=acc,
-                 font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 8))
+        tk.Label(self.res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
 
         row("Letras detectadas", str(r["n_letters"]))
         row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
@@ -2982,18 +3323,19 @@ class App(tk.Tk):
                  font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
         for nombre, precio in r.get("basicos", []):
             row(f"  {nombre}", fmt(precio))
-        row("Total basicos", fmt(r['c_basicos_total']), color="#f9e2af")
+        row("Total basicos", fmt(r['c_basicos_total']), color=fg)
         sep()
 
         c_vinil = r.get("c_vinil", 0.0)
         if c_vinil > 0:
-            row("Vinil / Vinil con transfer", fmt(c_vinil), color="#94e2d5")
+            row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
             sep()
 
         # Total label
+        tk.Frame(self.res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
         tk.Label(self.res_frame, text=f"TOTAL:  {fmt(r['total'])}", bg=bg,
-                 fg="#a6e3a1", font=("Segoe UI", 14, "bold")).pack(
-                 anchor="w", pady=(4, 0))
+                 fg="#1a1a1a", font=("Segoe UI", 15, "bold")).pack(
+                 anchor="w", pady=(0, 4))
 
         # Buttons row
         placements = r.get("placements", [])
@@ -3020,39 +3362,34 @@ class App(tk.Tk):
 
         bottom = tk.Frame(self.res_frame, bg=bg)
         bottom.pack(fill="x", pady=(10, 0))
-        tk.Button(bottom, text="Nesting acrilico + PVC 6mm",
-                  bg="#313244", fg="#cba6f7", relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=lambda: NestingWindow(
-                      self, r["n_pieces"], placements, r["n_acrilico"],
-                      on_change=on_nesting_change,
-                      piece_sizes=r["piece_sizes"],
-                      piece_vinil=r.get("piece_vinil", {}),
-                      vinil_prices=r.get("vinil_prices", {}))
-                  ).pack(side="left", padx=(0, 8))
-        tk.Button(bottom, text="Ver aluminio",
-                  bg="#313244", fg="#fab387", relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=lambda: AluminumWindow(
-                      self, r["letter_perims_cm"], r["letter_names"],
-                      r["n_aluminio"], strip_w=5.0, title="Aluminio")
-                  ).pack(side="left", padx=(0, 8))
-        tk.Button(bottom, text="Ver PVC 2mm",
-                  bg="#313244", fg="#94e2d5", relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=lambda: AluminumWindow(
-                      self, r["letter_perims_cm"], r["letter_names"],
-                      r["n_pvc2"], strip_w=2.0, title="PVC 2mm")
-                  ).pack(side="left", padx=(0, 8))
-        tk.Button(bottom, text="Ver plantilla papel",
-                  bg="#313244", fg="#f9e2af", relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=lambda: PaperWindow(
-                      self,
-                      r["sign_w_cm"], r["sign_h_cm"],
-                      r["papel_cfg"], r["n_papel"],
-                      letter_bboxes_cm=r.get("letter_bboxes_cm", []))
-                  ).pack(side="left", padx=(0, 8))
+
+        def _btn(parent, text, bg, fg, cmd, r=0, c=0):
+            tk.Button(parent, text=text, bg=bg, fg=fg, relief="flat",
+                      font=("Segoe UI", 9, "bold"), cursor="hand2",
+                      command=cmd, padx=10, pady=5
+                      ).grid(row=r, column=c, padx=(0, 6), pady=(0, 6), sticky="w")
+
+        _btn(bottom, "Nesting acrílico", "#111111", "#ffffff",
+             lambda: NestingWindow(
+                 self, r["n_pieces"], placements, r["n_acrilico"],
+                 on_change=on_nesting_change,
+                 piece_sizes=r["piece_sizes"],
+                 piece_vinil=r.get("piece_vinil", {}),
+                 vinil_prices=r.get("vinil_prices", {})),
+             r=0, c=0)
+        _btn(bottom, "Ver aluminio", "#e8e8e8", "#1a1a1a",
+             lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
+                                    r["n_aluminio"], strip_w=5.0, title="Aluminio"),
+             r=0, c=1)
+        _btn(bottom, "Ver PVC 2mm", "#e8e8e8", "#1a1a1a",
+             lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
+                                    r["n_pvc2"], strip_w=2.0, title="PVC 2mm"),
+             r=0, c=2)
+        _btn(bottom, "Plantilla papel", "#e8e8e8", "#1a1a1a",
+             lambda: PaperWindow(self, r["sign_w_cm"], r["sign_h_cm"],
+                                 r["papel_cfg"], r["n_papel"],
+                                 letter_bboxes_cm=r.get("letter_bboxes_cm", [])),
+             r=1, c=1)
 
         # r["piece_sizes"] is the shared dict — always use it for PDF too
         def _on_nesting_open():
@@ -3061,14 +3398,24 @@ class App(tk.Tk):
                                  piece_sizes=r["piece_sizes"])
 
         def _export_pdf():
-            ps = r.get("piece_sizes", {})
+            ps   = r.get("piece_sizes", {})
+            folio = self.cfg.get("folio", 6000)
             path = filedialog.asksaveasfilename(
                 defaultextension=".pdf",
                 filetypes=[("PDF", "*.pdf")],
-                initialfile="cotizacion_LB.pdf")
+                initialfile=f"presupuesto_{folio:04d}.pdf")
             if not path:
                 return
             try:
+                r["cliente"]         = self.cliente_var.get().strip()
+                r["empresa_cliente"] = self.empresa_c_var.get().strip()
+                r["direccion"]       = self.direccion_var.get().strip()
+                r["proyecto"]        = self.proyecto_var.get().strip()
+                r["descripcion"]     = self.desc_text.get("1.0", "end-1c").strip() if self.desc_text else ""
+                r["empresa"]         = self.cfg.get("empresa", {})
+                r["folio"]           = folio
+                self.cfg["folio"]    = folio + 1
+                save_config(self.cfg)
                 export_pdf(r, placements, ps, r["n_pieces"], path)
                 messagebox.showinfo("PDF exportado", f"Guardado en:\n{path}")
                 os.startfile(path)
@@ -3077,10 +3424,7 @@ class App(tk.Tk):
 
         # Replace the nesting button command to track the window reference
         # (add PDF button separately so it always has latest state)
-        tk.Button(bottom, text="Exportar PDF",
-                  bg="#a6e3a1", fg="#1e1e2e", relief="flat",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=_export_pdf).pack(side="left", padx=(8, 0))
+        _btn(bottom, "Exportar PDF", "#111111", "#ffffff", _export_pdf, r=1, c=2)
 
     def _settings(self):
         def on_save(new_cfg):
