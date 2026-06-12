@@ -1820,15 +1820,15 @@ class NestingWindow(tk.Toplevel):
                  font=("Segoe UI", 9)).pack(side="left")
         self._angle_entry = tk.Entry(rot_frame, textvariable=self._angle_var,
                                      width=6, bg=NW_BG2, fg=NW_FG,
-                                     font=("Segoe UI", 10), relief="flat")
+                                     font=("Segoe UI", 10), relief="sunken")
         self._angle_entry.pack(side="left", padx=4)
         tk.Label(rot_frame, text="°", bg=NW_BG, fg=NW_FG2,
                  font=("Segoe UI", 9)).pack(side="left")
         tk.Button(rot_frame, text="-15", bg=NW_BG2, fg=NW_FG,
-                  relief="flat", font=("Segoe UI", 8), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 8), cursor="hand2",
                   command=lambda: self._rotate_by(-15)).pack(side="left", padx=2)
         tk.Button(rot_frame, text="+15", bg=NW_BG2, fg=NW_FG,
-                  relief="flat", font=("Segoe UI", 8), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 8), cursor="hand2",
                   command=lambda: self._rotate_by(15)).pack(side="left", padx=2)
         self._angle_entry.bind("<Return>", self._on_angle_enter)
         self._angle_entry.bind("<FocusOut>", self._on_angle_enter)
@@ -1838,21 +1838,21 @@ class NestingWindow(tk.Toplevel):
                  ).pack(side="left")
 
         self.del_btn = tk.Button(top, text="× Eliminar última pieza",
-                                  bg=NW_BG2, fg="#c0392b", relief="flat",
+                                  bg=NW_BG2, fg="#c0392b", relief="raised",
                                   font=("Segoe UI", 9), cursor="hand2",
                                   command=self._del_last_piece)
         self.del_btn.pack(side="right", padx=(4,0))
         tk.Button(top, text="+ 240x120", bg=NW_BG2, fg="#27ae60",
-                  relief="flat", font=("Segoe UI", 9), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("xl")).pack(side="right", padx=2)
         tk.Button(top, text="+ 120x60", bg=NW_BG2, fg="#27ae60",
-                  relief="flat", font=("Segoe UI", 9), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("full")).pack(side="right", padx=2)
         tk.Button(top, text="+ 60x60", bg=NW_BG2, fg="#27ae60",
-                  relief="flat", font=("Segoe UI", 9), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_piece("half")).pack(side="right", padx=2)
         tk.Button(top, text="Exportar…", bg=NW_ACC, fg="#ffffff",
-                  relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 9, "bold"), cursor="hand2",
                   command=self._export).pack(side="right", padx=8)
 
         cf = tk.Frame(self, bg=NW_BG)
@@ -2316,7 +2316,7 @@ class NestingWindow(tk.Toplevel):
                 messagebox.showerror("Error al exportar", str(e))
 
         tk.Button(win, text="Elegir carpeta y exportar",
-                  bg="#cba6f7", fg="#1e1e2e", relief="flat",
+                  bg="#cba6f7", fg="#1e1e2e", relief="raised",
                   font=("Segoe UI", 10, "bold"), cursor="hand2",
                   command=do_export).pack(pady=(12, 18), padx=24, fill="x")
 
@@ -2687,7 +2687,7 @@ class PaperWindow(tk.Toplevel):
                 f"{len(files)} archivo(s) SVG guardados en:\n{folder}")
 
         tk.Button(hdr_row, text="Exportar SVG…", bg="#111111", fg="#ffffff",
-                  relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 9, "bold"), cursor="hand2",
                   command=_do_export).pack(side="right", padx=(8, 0))
 
         tk.Label(
@@ -2811,7 +2811,7 @@ class SettingsWindow(tk.Toplevel):
         var = tk.StringVar(value=str(value))
         e = tk.Entry(parent, textvariable=var, width=width,
                      bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                     relief="flat", font=("Segoe UI", 10))
+                     relief="sunken", font=("Segoe UI", 10))
         return e, var
 
     def _sep(self, parent):
@@ -2842,7 +2842,7 @@ class SettingsWindow(tk.Toplevel):
         self._tab_fuentes(t5)
 
         tk.Button(self, text="  Guardar  ", bg=self.ACC, fg="#ffffff",
-                  relief="flat", font=("Segoe UI", 11, "bold"), cursor="hand2",
+                  relief="raised", font=("Segoe UI", 11, "bold"), cursor="hand2",
                   command=self._save).pack(pady=(0, 14))
 
     def _price_row(self, parent, row, label, key, section="precios"):
@@ -2884,7 +2884,7 @@ class SettingsWindow(tk.Toplevel):
         # re-grid the entry
         tk.Entry(f, textvariable=self._vinil_unit_var, width=12,
                  bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="flat", font=("Segoe UI", 10)).grid(
+                 relief="sunken", font=("Segoe UI", 10)).grid(
             row=1, column=1, padx=14, pady=5)
 
         self._lbl(f, "Extra por 'con transfer' (MXN)").grid(
@@ -2893,7 +2893,7 @@ class SettingsWindow(tk.Toplevel):
             f, p.get("vinil_transfer_extra", VINIL_TRANSFER_EXTRA))
         tk.Entry(f, textvariable=self._vinil_xtra_var, width=12,
                  bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="flat", font=("Segoe UI", 10)).grid(
+                 relief="sunken", font=("Segoe UI", 10)).grid(
             row=2, column=1, padx=14, pady=5)
 
         self._lbl(f, "Ejemplo: plantilla 240×120 con transfer = (vinil×4) + (extra×4)",
@@ -2935,7 +2935,7 @@ class SettingsWindow(tk.Toplevel):
             self._add_basico_row(b["nombre"], b["precio"])
 
         tk.Button(list_frame, text="+ Agregar concepto",
-                  bg=self.BG2, fg=self.ACC, relief="flat",
+                  bg=self.BG2, fg=self.ACC, relief="raised",
                   font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._add_basico_row("", 0)
                   ).pack(anchor="w", pady=(4, 0))
@@ -2947,13 +2947,13 @@ class SettingsWindow(tk.Toplevel):
         pvar = tk.StringVar(value=str(precio))
         tk.Entry(row_f, textvariable=nvar, width=24,
                  bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="flat", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
+                 relief="sunken", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
         tk.Entry(row_f, textvariable=pvar, width=10,
                  bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="flat", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
+                 relief="sunken", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
         self._lbl(row_f, "MXN").pack(side="left")
         row_ref = [row_f, nvar, pvar]
-        tk.Button(row_f, text="✕", bg=self.BG, fg="#f38ba8", relief="flat",
+        tk.Button(row_f, text="✕", bg=self.BG, fg="#f38ba8", relief="raised",
                   font=("Segoe UI", 9), cursor="hand2",
                   command=lambda: self._del_basico_row(row_ref)
                   ).pack(side="left", padx=(6,0))
@@ -3080,10 +3080,10 @@ class App(tk.Tk):
         svg_row = tk.Frame(left, bg=BG)
         svg_row.pack(fill="x", pady=(4, 0))
         tk.Entry(svg_row, textvariable=self.svg_path, state="readonly",
-                 bg=BG3, fg=FG2, relief="flat", font=("Segoe UI", 8),
+                 bg=BG3, fg=FG2, relief="sunken", font=("Segoe UI", 8),
                  width=20, insertbackground=FG
                  ).pack(side="left", ipady=5, padx=(0, 6))
-        tk.Button(svg_row, text="Abrir", bg="#ffffff", fg="#111111", relief="flat",
+        tk.Button(svg_row, text="Abrir", bg="#ffffff", fg="#111111", relief="raised",
                   font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=4,
                   command=self._open_file).pack(side="left")
 
@@ -3092,7 +3092,7 @@ class App(tk.Tk):
                  font=("Segoe UI", 8)).pack(anchor="w")
         self.width_var = tk.StringVar()
         tk.Entry(left, textvariable=self.width_var,
-                 bg=BG3, fg=FG, relief="flat", font=("Segoe UI", 10),
+                 bg=BG3, fg=FG, relief="sunken", font=("Segoe UI", 10),
                  width=10, insertbackground=FG).pack(anchor="w", ipady=5, pady=(3, 0))
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
@@ -3108,7 +3108,7 @@ class App(tk.Tk):
         for lbl, var in campos:
             tk.Label(left, text=lbl, bg=BG, fg=FG2,
                      font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
-            tk.Entry(left, textvariable=var, bg=BG3, fg=FG, relief="flat",
+            tk.Entry(left, textvariable=var, bg=BG3, fg=FG, relief="sunken",
                      font=("Segoe UI", 9), width=26,
                      insertbackground=FG).pack(anchor="w", ipady=5, pady=(2, 0))
 
@@ -3118,7 +3118,7 @@ class App(tk.Tk):
         desc_frame.pack(fill="x", pady=(2, 0))
         self.desc_text = tk.Text(desc_frame, width=26, height=4,
                                  bg=BG3, fg=FG, insertbackground=FG,
-                                 font=("Segoe UI", 9), relief="flat", wrap="word",
+                                 font=("Segoe UI", 9), relief="sunken", wrap="word",
                                  padx=6, pady=6)
         self.desc_text.pack(fill="both")
 
@@ -3126,13 +3126,13 @@ class App(tk.Tk):
 
         # ── Botones acción ────────────────────────────────────────────────
         tk.Button(left, text="Calcular cotización",
-                  bg="#ffffff", fg="#111111", relief="flat",
+                  bg="#ffffff", fg="#111111", relief="raised",
                   font=("Segoe UI", 10, "bold"), cursor="hand2",
                   padx=12, pady=8, command=self._calcular
                   ).pack(fill="x")
         tk.Frame(left, bg=BG, height=6).pack()
         tk.Button(left, text="⚙  Configuración",
-                  bg=BG3, fg=FG2, relief="flat",
+                  bg=BG3, fg=FG2, relief="raised",
                   font=("Segoe UI", 9), cursor="hand2",
                   padx=10, pady=6, command=self._settings
                   ).pack(fill="x")
@@ -3364,7 +3364,7 @@ class App(tk.Tk):
         bottom.pack(fill="x", pady=(10, 0))
 
         def _btn(parent, text, bg, fg, cmd, r=0, c=0):
-            tk.Button(parent, text=text, bg=bg, fg=fg, relief="flat",
+            tk.Button(parent, text=text, bg=bg, fg=fg, relief="raised",
                       font=("Segoe UI", 9, "bold"), cursor="hand2",
                       command=cmd, padx=10, pady=5
                       ).grid(row=r, column=c, padx=(0, 6), pady=(0, 6), sticky="w")
