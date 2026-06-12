@@ -1,0 +1,60 @@
+{
+  "precios": {
+    "acrilico_lamina": 1924.0,
+    "aluminio_lamina": 2450.0,
+    "pvc6_lamina": 850.0,
+    "pvc2_lamina": 530.0,
+    "mano_obra_letra": 700.0,
+    "led_rollo": 362.0,
+    "instalacion": 3500.0,
+    "fee_asociado": 140.0,
+    "vinil_unit": 100.0,
+    "vinil_transfer_extra": 60.0
+  },
+  "fuentes": [
+    {
+      "watts": 15,
+      "precio": 197.0
+    },
+    {
+      "watts": 35,
+      "precio": 450.0
+    },
+    {
+      "watts": 60,
+      "precio": 636.0
+    },
+    {
+      "watts": 100,
+      "precio": 711.0
+    },
+    {
+      "watts": 150,
+      "precio": 964.0
+    }
+  ],
+  "basicos": [
+    {
+      "nombre": "Tornilleria",
+      "precio": 220.0
+    },
+    {
+      "nombre": "Cable de bocina",
+      "precio": 660.0
+    },
+    {
+      "nombre": "Silicon",
+      "precio": 155.0
+    },
+    {
+      "nombre": "Otros/envio",
+      "precio": 600.0
+    }
+  ],
+  "papel_plantilla": {
+    "ancho_cm": 120.0,
+    "alto_cm": 60.0,
+    "precio": 15.0
+  },
+  "folio": 6001
+}
