@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from tkinter.font import Font as _TkFont
 import json
 import os
 import math
@@ -11,6 +12,179 @@ try:
     HAS_SVG = True
 except ImportError:
     HAS_SVG = False
+
+# ---------------------------------------------------------------------------
+# Rounded-corner widget helpers
+# ---------------------------------------------------------------------------
+def _rr_pts(x1, y1, x2, y2, r):
+    """Polygon points for a smooth rounded rectangle."""
+    return [x1+r,y1, x2-r,y1, x2,y1, x2,y1+r,
+            x2,y2-r, x2,y2, x2-r,y2, x1+r,y2,
+            x1,y2, x1,y2-r, x1,y1+r, x1,y1]
+
+def _hex_mix(color, amount=25):
+    """Lighten a hex color by adding `amount` to each channel."""
+    c = color.lstrip("#")
+    r = min(255, int(c[0:2], 16) + amount)
+    g = min(255, int(c[2:4], 16) + amount)
+    b = min(255, int(c[4:6], 16) + amount)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+class RoundedButton(tk.Canvas):
+    """A flat, rounded-corner button drawn on a Canvas."""
+    RADIUS = 9
+
+    def __init__(self, parent, text, bg, fg, command=None,
+                 parent_bg=None, font=("Segoe UI", 9, "bold"),
+                 padx=14, pady=6, cursor="hand2", **kw):
+        self._bg  = bg
+        self._fg  = fg
+        self._cmd = command
+        self._enabled = True
+
+        fnt = _TkFont(family=font[0], size=font[1],
+                      weight=font[2] if len(font) > 2 else "normal")
+        cw = fnt.measure(text) + padx * 2
+        ch = fnt.metrics("linespace") + pady * 2
+
+        pbg = parent_bg or self._parent_bg(parent)
+        super().__init__(parent, width=cw, height=ch,
+                         bg=pbg, highlightthickness=0, bd=0, cursor=cursor, **kw)
+
+        r = min(self.RADIUS, ch // 2)
+        self._shape = self.create_polygon(
+            _rr_pts(0, 0, cw, ch, r), smooth=True, fill=bg, outline="")
+        self._tid = self.create_text(
+            cw // 2, ch // 2, text=text, fill=fg, font=font, anchor="center")
+
+        for item in (self._shape, self._tid):
+            self.tag_bind(item, "<Button-1>", self._click)
+            self.tag_bind(item, "<Enter>",    self._enter)
+            self.tag_bind(item, "<Leave>",    self._leave)
+        self.bind("<Button-1>",  self._click)
+        self.bind("<Enter>",     self._enter)
+        self.bind("<Leave>",     self._leave)
+        self.bind("<Configure>", self._on_resize)
+        self._ch = ch
+
+    def _on_resize(self, e):
+        cw, ch = e.width, self._ch
+        r = min(self.RADIUS, ch // 2)
+        self.coords(self._shape, _rr_pts(0, 0, cw, ch, r))
+        self.coords(self._tid, cw // 2, ch // 2)
+
+    @staticmethod
+    def _parent_bg(w):
+        try:
+            return w.cget("bg")
+        except Exception:
+            return "#f5f5f5"
+
+    def _click(self, _e=None):
+        if self._enabled and self._cmd:
+            self._cmd()
+
+    def _enter(self, _e=None):
+        if self._enabled:
+            self.itemconfig(self._shape, fill=_hex_mix(self._bg, 20))
+
+    def _leave(self, _e=None):
+        self.itemconfig(self._shape,
+                        fill="#aaaaaa" if not self._enabled else self._bg)
+
+    def config(self, **kw):
+        if "state" in kw:
+            self._enabled = kw.pop("state") != "disabled"
+            self.itemconfig(self._shape,
+                            fill="#aaaaaa" if not self._enabled else self._bg)
+        if "text" in kw:
+            self.itemconfig(self._tid, text=kw.pop("text"))
+        if kw:
+            super().config(**kw)
+
+    configure = config
+
+
+class RoundedEntry(tk.Canvas):
+    """An Entry field with a rounded-corner border."""
+    RADIUS = 6
+
+    def __init__(self, parent, textvariable=None, bg="#e8e8e8", fg="#1a1a1a",
+                 parent_bg=None, font=("Segoe UI", 10), width=15,
+                 insertbackground=None, state="normal", **kw):
+        fnt = _TkFont(family=font[0], size=font[1])
+        cw = fnt.measure("0") * width + 14
+        ch = fnt.metrics("linespace") + 14
+
+        pbg = parent_bg or self._parent_bg(parent)
+        super().__init__(parent, width=cw, height=ch,
+                         bg=pbg, highlightthickness=0, bd=0)
+
+        r = min(self.RADIUS, ch // 2)
+        self.create_polygon(_rr_pts(0, 0, cw, ch, r),
+                            smooth=True, fill=bg, outline="")
+
+        self._entry = tk.Entry(
+            self, textvariable=textvariable, bg=bg, fg=fg,
+            relief="flat", bd=0, font=font, width=width,
+            insertbackground=insertbackground or fg,
+            state=state, **kw)
+        self.create_window(cw // 2, ch // 2, window=self._entry)
+
+    @staticmethod
+    def _parent_bg(w):
+        try:
+            return w.cget("bg")
+        except Exception:
+            return "#f5f5f5"
+
+    # proxy common Entry methods
+    def get(self):            return self._entry.get()
+    def insert(self, *a):    self._entry.insert(*a)
+    def delete(self, *a):    self._entry.delete(*a)
+    def bind(self, *a, **k): return self._entry.bind(*a, **k)
+
+
+class RoundedText(tk.Canvas):
+    """A Text widget with a rounded-corner border."""
+    RADIUS = 6
+
+    def __init__(self, parent, bg="#e8e8e8", fg="#1a1a1a",
+                 parent_bg=None, font=("Segoe UI", 9),
+                 width=26, height=4, **kw):
+        fnt = _TkFont(family=font[0], size=font[1])
+        cw = fnt.measure("0") * width + 14
+        lh = fnt.metrics("linespace")
+        ch = lh * height + 14
+
+        pbg = parent_bg or self._parent_bg(parent)
+        super().__init__(parent, width=cw, height=ch,
+                         bg=pbg, highlightthickness=0, bd=0)
+
+        r = min(self.RADIUS, 14)
+        self.create_polygon(_rr_pts(0, 0, cw, ch, r),
+                            smooth=True, fill=bg, outline="")
+
+        self._text = tk.Text(
+            self, bg=bg, fg=fg, relief="flat", bd=0,
+            font=font, width=width, height=height,
+            insertbackground=fg, wrap="word",
+            padx=6, pady=6, **kw)
+        self.create_window(cw // 2, ch // 2, window=self._text)
+
+    @staticmethod
+    def _parent_bg(w):
+        try:
+            return w.cget("bg")
+        except Exception:
+            return "#f5f5f5"
+
+    def get(self, *a):        return self._text.get(*a)
+    def insert(self, *a):    self._text.insert(*a)
+    def delete(self, *a):    self._text.delete(*a)
+    def bind(self, *a, **k): return self._text.bind(*a, **k)
+
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -1818,18 +1992,20 @@ class NestingWindow(tk.Toplevel):
         rot_frame.pack(side="left", padx=16)
         tk.Label(rot_frame, text="Angulo:", bg=NW_BG, fg=NW_FG2,
                  font=("Segoe UI", 9)).pack(side="left")
-        self._angle_entry = tk.Entry(rot_frame, textvariable=self._angle_var,
-                                     width=6, bg=NW_BG2, fg=NW_FG,
-                                     font=("Segoe UI", 10), relief="sunken")
+        self._angle_entry = RoundedEntry(rot_frame, textvariable=self._angle_var,
+                                         width=5, bg=NW_BG2, fg=NW_FG,
+                                         parent_bg=NW_BG, font=("Segoe UI", 10))
         self._angle_entry.pack(side="left", padx=4)
         tk.Label(rot_frame, text="°", bg=NW_BG, fg=NW_FG2,
                  font=("Segoe UI", 9)).pack(side="left")
-        tk.Button(rot_frame, text="-15", bg=NW_BG2, fg=NW_FG,
-                  relief="raised", font=("Segoe UI", 8), cursor="hand2",
-                  command=lambda: self._rotate_by(-15)).pack(side="left", padx=2)
-        tk.Button(rot_frame, text="+15", bg=NW_BG2, fg=NW_FG,
-                  relief="raised", font=("Segoe UI", 8), cursor="hand2",
-                  command=lambda: self._rotate_by(15)).pack(side="left", padx=2)
+        RoundedButton(rot_frame, text="-15", bg=NW_BG2, fg=NW_FG,
+                      parent_bg=NW_BG, font=("Segoe UI", 8),
+                      command=lambda: self._rotate_by(-15), padx=8, pady=4
+                      ).pack(side="left", padx=2)
+        RoundedButton(rot_frame, text="+15", bg=NW_BG2, fg=NW_FG,
+                      parent_bg=NW_BG, font=("Segoe UI", 8),
+                      command=lambda: self._rotate_by(15), padx=8, pady=4
+                      ).pack(side="left", padx=2)
         self._angle_entry.bind("<Return>", self._on_angle_enter)
         self._angle_entry.bind("<FocusOut>", self._on_angle_enter)
 
@@ -1837,23 +2013,23 @@ class NestingWindow(tk.Toplevel):
                  text="  Click: seleccionar  │  R: rotar  │  ←→: cambiar pieza  │  Arrastrar: mover"
                  ).pack(side="left")
 
-        self.del_btn = tk.Button(top, text="× Eliminar última pieza",
-                                  bg=NW_BG2, fg="#c0392b", relief="raised",
-                                  font=("Segoe UI", 9), cursor="hand2",
-                                  command=self._del_last_piece)
-        self.del_btn.pack(side="right", padx=(4,0))
-        tk.Button(top, text="+ 240x120", bg=NW_BG2, fg="#27ae60",
-                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
-                  command=lambda: self._add_piece("xl")).pack(side="right", padx=2)
-        tk.Button(top, text="+ 120x60", bg=NW_BG2, fg="#27ae60",
-                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
-                  command=lambda: self._add_piece("full")).pack(side="right", padx=2)
-        tk.Button(top, text="+ 60x60", bg=NW_BG2, fg="#27ae60",
-                  relief="raised", font=("Segoe UI", 9), cursor="hand2",
-                  command=lambda: self._add_piece("half")).pack(side="right", padx=2)
-        tk.Button(top, text="Exportar…", bg=NW_ACC, fg="#ffffff",
-                  relief="raised", font=("Segoe UI", 9, "bold"), cursor="hand2",
-                  command=self._export).pack(side="right", padx=8)
+        self.del_btn = RoundedButton(top, text="× Eliminar última pieza",
+                                      bg=NW_BG2, fg="#c0392b", parent_bg=NW_BG,
+                                      font=("Segoe UI", 9), padx=10, pady=5,
+                                      command=self._del_last_piece)
+        self.del_btn.pack(side="right", padx=(4, 0))
+        RoundedButton(top, text="+ 240x120", bg=NW_BG2, fg="#27ae60",
+                      parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
+                      command=lambda: self._add_piece("xl")).pack(side="right", padx=2)
+        RoundedButton(top, text="+ 120x60", bg=NW_BG2, fg="#27ae60",
+                      parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
+                      command=lambda: self._add_piece("full")).pack(side="right", padx=2)
+        RoundedButton(top, text="+ 60x60", bg=NW_BG2, fg="#27ae60",
+                      parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
+                      command=lambda: self._add_piece("half")).pack(side="right", padx=2)
+        RoundedButton(top, text="Exportar…", bg=NW_ACC, fg="#ffffff",
+                      parent_bg=NW_BG, font=("Segoe UI", 9, "bold"), padx=12, pady=5,
+                      command=self._export).pack(side="right", padx=8)
 
         cf = tk.Frame(self, bg=NW_BG)
         cf.pack(fill="both", expand=True, padx=10, pady=10)
@@ -2315,10 +2491,10 @@ class NestingWindow(tk.Toplevel):
             except Exception as e:
                 messagebox.showerror("Error al exportar", str(e))
 
-        tk.Button(win, text="Elegir carpeta y exportar",
-                  bg="#cba6f7", fg="#1e1e2e", relief="raised",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  command=do_export).pack(pady=(12, 18), padx=24, fill="x")
+        RoundedButton(win, text="Elegir carpeta y exportar",
+                      bg="#111111", fg="#ffffff", parent_bg=win.cget("bg"),
+                      font=("Segoe UI", 10, "bold"), padx=16, pady=8,
+                      command=do_export).pack(pady=(12, 18), padx=24)
 
     def _add_piece(self, size="full"):
         self.piece_sizes[self.n_pieces] = size
@@ -2686,9 +2862,10 @@ class PaperWindow(tk.Toplevel):
             messagebox.showinfo("Exportado",
                 f"{len(files)} archivo(s) SVG guardados en:\n{folder}")
 
-        tk.Button(hdr_row, text="Exportar SVG…", bg="#111111", fg="#ffffff",
-                  relief="raised", font=("Segoe UI", 9, "bold"), cursor="hand2",
-                  command=_do_export).pack(side="right", padx=(8, 0))
+        RoundedButton(hdr_row, text="Exportar SVG…", bg="#111111", fg="#ffffff",
+                      parent_bg=hdr_row.cget("bg"),
+                      font=("Segoe UI", 9, "bold"), padx=12, pady=5,
+                      command=_do_export).pack(side="right", padx=(8, 0))
 
         tk.Label(
             self, bg="#f5f5f5", fg="#666666", font=("Segoe UI", 9),
@@ -2809,9 +2986,9 @@ class SettingsWindow(tk.Toplevel):
 
     def _entry(self, parent, value, width=12):
         var = tk.StringVar(value=str(value))
-        e = tk.Entry(parent, textvariable=var, width=width,
-                     bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                     relief="sunken", font=("Segoe UI", 10))
+        e = RoundedEntry(parent, textvariable=var, width=width,
+                         bg=self.BG2, fg=self.FG,
+                         parent_bg=self.BG, font=("Segoe UI", 10))
         return e, var
 
     def _sep(self, parent):
@@ -2841,9 +3018,10 @@ class SettingsWindow(tk.Toplevel):
         self._tab_basicos(t4)
         self._tab_fuentes(t5)
 
-        tk.Button(self, text="  Guardar  ", bg=self.ACC, fg="#ffffff",
-                  relief="raised", font=("Segoe UI", 11, "bold"), cursor="hand2",
-                  command=self._save).pack(pady=(0, 14))
+        RoundedButton(self, text="  Guardar  ", bg=self.ACC, fg="#ffffff",
+                      parent_bg=self.BG,
+                      font=("Segoe UI", 11, "bold"), padx=20, pady=8,
+                      command=self._save).pack(pady=(0, 14))
 
     def _price_row(self, parent, row, label, key, section="precios"):
         self._lbl(parent, label).grid(row=row, column=0, sticky="w",
@@ -2882,18 +3060,18 @@ class SettingsWindow(tk.Toplevel):
             f, p.get("vinil_unit", VINIL_PRECIO_UNIT))
         self._vinil_unit_var   # referenced via grid below
         # re-grid the entry
-        tk.Entry(f, textvariable=self._vinil_unit_var, width=12,
-                 bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="sunken", font=("Segoe UI", 10)).grid(
+        RoundedEntry(f, textvariable=self._vinil_unit_var, width=12,
+                     bg=self.BG2, fg=self.FG,
+                     parent_bg=self.BG, font=("Segoe UI", 10)).grid(
             row=1, column=1, padx=14, pady=5)
 
         self._lbl(f, "Extra por 'con transfer' (MXN)").grid(
             row=2, column=0, sticky="w", padx=14, pady=5)
         _, self._vinil_xtra_var = self._entry(
             f, p.get("vinil_transfer_extra", VINIL_TRANSFER_EXTRA))
-        tk.Entry(f, textvariable=self._vinil_xtra_var, width=12,
-                 bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="sunken", font=("Segoe UI", 10)).grid(
+        RoundedEntry(f, textvariable=self._vinil_xtra_var, width=12,
+                     bg=self.BG2, fg=self.FG,
+                     parent_bg=self.BG, font=("Segoe UI", 10)).grid(
             row=2, column=1, padx=14, pady=5)
 
         self._lbl(f, "Ejemplo: plantilla 240×120 con transfer = (vinil×4) + (extra×4)",
@@ -2934,29 +3112,29 @@ class SettingsWindow(tk.Toplevel):
         for b in self.cfg.get("basicos", []):
             self._add_basico_row(b["nombre"], b["precio"])
 
-        tk.Button(list_frame, text="+ Agregar concepto",
-                  bg=self.BG2, fg=self.ACC, relief="raised",
-                  font=("Segoe UI", 9), cursor="hand2",
-                  command=lambda: self._add_basico_row("", 0)
-                  ).pack(anchor="w", pady=(4, 0))
+        RoundedButton(list_frame, text="+ Agregar concepto",
+                      bg=self.BG2, fg=self.ACC, parent_bg=self.BG,
+                      font=("Segoe UI", 9), padx=10, pady=5,
+                      command=lambda: self._add_basico_row("", 0)
+                      ).pack(anchor="w", pady=(4, 0))
 
     def _add_basico_row(self, nombre, precio):
         row_f = tk.Frame(self._basicos_container, bg=self.BG)
         row_f.pack(fill="x", pady=2)
         nvar = tk.StringVar(value=nombre)
         pvar = tk.StringVar(value=str(precio))
-        tk.Entry(row_f, textvariable=nvar, width=24,
-                 bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="sunken", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
-        tk.Entry(row_f, textvariable=pvar, width=10,
-                 bg=self.BG2, fg=self.FG, insertbackground=self.FG,
-                 relief="sunken", font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
+        RoundedEntry(row_f, textvariable=nvar, width=24,
+                     bg=self.BG2, fg=self.FG,
+                     parent_bg=self.BG, font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
+        RoundedEntry(row_f, textvariable=pvar, width=10,
+                     bg=self.BG2, fg=self.FG,
+                     parent_bg=self.BG, font=("Segoe UI", 10)).pack(side="left", padx=(0,6))
         self._lbl(row_f, "MXN").pack(side="left")
         row_ref = [row_f, nvar, pvar]
-        tk.Button(row_f, text="✕", bg=self.BG, fg="#f38ba8", relief="raised",
-                  font=("Segoe UI", 9), cursor="hand2",
-                  command=lambda: self._del_basico_row(row_ref)
-                  ).pack(side="left", padx=(6,0))
+        RoundedButton(row_f, text="✕", bg=self.BG2, fg="#c0392b", parent_bg=self.BG,
+                      font=("Segoe UI", 9), padx=6, pady=4,
+                      command=lambda: self._del_basico_row(row_ref)
+                      ).pack(side="left", padx=(6, 0))
         self._basicos_rows.append(row_ref)
 
     def _del_basico_row(self, row_ref):
@@ -3079,21 +3257,20 @@ class App(tk.Tk):
         self._section_label(left, "ARCHIVO")
         svg_row = tk.Frame(left, bg=BG)
         svg_row.pack(fill="x", pady=(4, 0))
-        tk.Entry(svg_row, textvariable=self.svg_path, state="readonly",
-                 bg=BG3, fg=FG2, relief="sunken", font=("Segoe UI", 8),
-                 width=20, insertbackground=FG
-                 ).pack(side="left", ipady=5, padx=(0, 6))
-        tk.Button(svg_row, text="Abrir", bg="#ffffff", fg="#111111", relief="raised",
-                  font=("Segoe UI", 9, "bold"), cursor="hand2", padx=10, pady=4,
-                  command=self._open_file).pack(side="left")
+        RoundedEntry(svg_row, textvariable=self.svg_path, state="readonly",
+                     bg=BG3, fg=FG2, parent_bg=BG,
+                     font=("Segoe UI", 8), width=18).pack(side="left", padx=(0, 6))
+        RoundedButton(svg_row, text="Abrir", bg="#ffffff", fg="#111111",
+                      parent_bg=BG, font=("Segoe UI", 9, "bold"),
+                      padx=10, pady=5, command=self._open_file).pack(side="left")
 
         tk.Frame(left, bg=BG, height=10).pack()
         tk.Label(left, text="Ancho real (cm)", bg=BG, fg=FG2,
                  font=("Segoe UI", 8)).pack(anchor="w")
         self.width_var = tk.StringVar()
-        tk.Entry(left, textvariable=self.width_var,
-                 bg=BG3, fg=FG, relief="sunken", font=("Segoe UI", 10),
-                 width=10, insertbackground=FG).pack(anchor="w", ipady=5, pady=(3, 0))
+        RoundedEntry(left, textvariable=self.width_var,
+                     bg=BG3, fg=FG, parent_bg=BG,
+                     font=("Segoe UI", 10), width=10).pack(anchor="w", pady=(3, 0))
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
@@ -3108,34 +3285,27 @@ class App(tk.Tk):
         for lbl, var in campos:
             tk.Label(left, text=lbl, bg=BG, fg=FG2,
                      font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
-            tk.Entry(left, textvariable=var, bg=BG3, fg=FG, relief="sunken",
-                     font=("Segoe UI", 9), width=26,
-                     insertbackground=FG).pack(anchor="w", ipady=5, pady=(2, 0))
+            RoundedEntry(left, textvariable=var, bg=BG3, fg=FG, parent_bg=BG,
+                         font=("Segoe UI", 9), width=24).pack(anchor="w", pady=(2, 0))
 
         tk.Label(left, text="Descripción", bg=BG, fg=FG2,
                  font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
-        desc_frame = tk.Frame(left, bg=BG3)
-        desc_frame.pack(fill="x", pady=(2, 0))
-        self.desc_text = tk.Text(desc_frame, width=26, height=4,
-                                 bg=BG3, fg=FG, insertbackground=FG,
-                                 font=("Segoe UI", 9), relief="sunken", wrap="word",
-                                 padx=6, pady=6)
-        self.desc_text.pack(fill="both")
+        self.desc_text = RoundedText(left, bg=BG3, fg=FG, parent_bg=BG,
+                                     font=("Segoe UI", 9), width=24, height=4)
+        self.desc_text.pack(anchor="w", pady=(2, 0))
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
         # ── Botones acción ────────────────────────────────────────────────
-        tk.Button(left, text="Calcular cotización",
-                  bg="#ffffff", fg="#111111", relief="raised",
-                  font=("Segoe UI", 10, "bold"), cursor="hand2",
-                  padx=12, pady=8, command=self._calcular
-                  ).pack(fill="x")
+        RoundedButton(left, text="Calcular cotización",
+                      bg="#ffffff", fg="#111111", parent_bg=BG,
+                      font=("Segoe UI", 10, "bold"), padx=12, pady=9,
+                      command=self._calcular).pack(fill="x")
         tk.Frame(left, bg=BG, height=6).pack()
-        tk.Button(left, text="⚙  Configuración",
-                  bg=BG3, fg=FG2, relief="raised",
-                  font=("Segoe UI", 9), cursor="hand2",
-                  padx=10, pady=6, command=self._settings
-                  ).pack(fill="x")
+        RoundedButton(left, text="⚙  Configuración",
+                      bg=BG3, fg=FG2, parent_bg=BG,
+                      font=("Segoe UI", 9), padx=10, pady=7,
+                      command=self._settings).pack(fill="x")
 
         # ══ Panel derecho — resultados scrollables ════════════════════════
         right = tk.Frame(self, bg=BG2)
@@ -3364,10 +3534,11 @@ class App(tk.Tk):
         bottom.pack(fill="x", pady=(10, 0))
 
         def _btn(parent, text, bg, fg, cmd, r=0, c=0):
-            tk.Button(parent, text=text, bg=bg, fg=fg, relief="raised",
-                      font=("Segoe UI", 9, "bold"), cursor="hand2",
-                      command=cmd, padx=10, pady=5
-                      ).grid(row=r, column=c, padx=(0, 6), pady=(0, 6), sticky="w")
+            RoundedButton(parent, text=text, bg=bg, fg=fg, command=cmd,
+                          parent_bg=parent.cget("bg"),
+                          font=("Segoe UI", 9, "bold"),
+                          padx=12, pady=6
+                          ).grid(row=r, column=c, padx=(0, 6), pady=(0, 6), sticky="w")
 
         _btn(bottom, "Nesting acrílico", "#111111", "#ffffff",
              lambda: NestingWindow(
