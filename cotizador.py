@@ -3471,7 +3471,7 @@ class App(tk.Tk):
                     default_desc = (
                         "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
                         "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                        f"con charolas de PVC. luz directa a base de leds blanco 4000K. medidas: {dims}"
+                        f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
                     )
                     self.desc_text.delete("1.0", "end")
                     self.desc_text.insert("1.0", default_desc)
@@ -3586,6 +3586,20 @@ class App(tk.Tk):
             self._last_r = result
             for rf in self.res_frames:
                 self._show_results(result, rf)
+            # Pre-fill description if empty
+            if self.desc_text:
+                current = self.desc_text.get("1.0", "end-1c").strip()
+                if not current:
+                    w_cm = result.get("sign_w_cm", 0)
+                    h_cm = result.get("sign_h_cm", 0)
+                    dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+                    default_desc = (
+                        "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                        "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                        f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
+                    )
+                    self.desc_text.delete("1.0", "end")
+                    self.desc_text.insert("1.0", default_desc)
 
         threading.Thread(target=worker, daemon=True).start()
 
