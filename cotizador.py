@@ -3246,6 +3246,8 @@ class App(tk.Tk):
         self.tipo_persona_var = tk.StringVar(value="Persona Física")
         self.desc_text     = None   # tk.Text widget, assigned in _build
         self._last_r       = None   # last calculate() result, for default descriptions
+        self._desc_per_tab = ["", ""]   # saved description text per tab index
+        self._active_tab   = 0
 
         self._build()
 
@@ -3447,7 +3449,23 @@ class App(tk.Tk):
             f = tk.Frame(outer, bg=t["bg"], padx=24, pady=24)
             self.res_frames.append(f)
 
+        def _aluminio_default_desc():
+            if not self._last_r:
+                return ""
+            w_cm = self._last_r.get("sign_w_cm", 0)
+            h_cm = self._last_r.get("sign_h_cm", 0)
+            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+            return (
+                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
+            )
+
         def _switch_tab(idx):
+            # Save current description to the tab we're leaving
+            if self.desc_text:
+                self._desc_per_tab[self._active_tab] = self.desc_text.get("1.0", "end-1c")
+
             for i, (f, btn_data) in enumerate(zip(self.res_frames, self._tab_btns)):
                 if i == idx:
                     f.pack(fill="both", expand=True)
@@ -3461,20 +3479,16 @@ class App(tk.Tk):
                         bg="#e0e0e0", fg="#555555",
                         relief="flat", font=("Segoe UI", 9))
                     btn_data["bar"].config(bg="#e0e0e0")
-            # Pre-fill default description for Aluminio tab if description is empty
-            if idx == 1 and self.desc_text and self._last_r:
-                current = self.desc_text.get("1.0", "end-1c").strip()
-                if not current:
-                    w_cm = self._last_r.get("sign_w_cm", 0)
-                    h_cm = self._last_r.get("sign_h_cm", 0)
-                    dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-                    default_desc = (
-                        "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                        "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                        f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-                    )
-                    self.desc_text.delete("1.0", "end")
-                    self.desc_text.insert("1.0", default_desc)
+
+            # Restore description for the new tab
+            if self.desc_text:
+                saved = self._desc_per_tab[idx]
+                if not saved and idx == 1:
+                    saved = _aluminio_default_desc()
+                    self._desc_per_tab[1] = saved
+                self.desc_text.delete("1.0", "end")
+                self.desc_text.insert("1.0", saved)
+            self._active_tab = idx
 
         for i, t in enumerate(TABS):
             col = tk.Frame(tab_bar, bg=BG2)
@@ -3584,22 +3598,24 @@ class App(tk.Tk):
                 return
             result["tipo_persona"] = self.tipo_persona_var.get()
             self._last_r = result
+            self._desc_per_tab = ["", ""]   # reset saved descriptions on new calculation
             for rf in self.res_frames:
                 self._show_results(result, rf)
-            # Pre-fill description if empty
-            if self.desc_text:
-                current = self.desc_text.get("1.0", "end-1c").strip()
-                if not current:
-                    w_cm = result.get("sign_w_cm", 0)
-                    h_cm = result.get("sign_h_cm", 0)
-                    dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-                    default_desc = (
-                        "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                        "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                        f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-                    )
-                    self.desc_text.delete("1.0", "end")
-                    self.desc_text.insert("1.0", default_desc)
+            # If aluminio tab is active, fill description now
+            if self._active_tab == 1 and self.desc_text:
+                w_cm = result.get("sign_w_cm", 0)
+                h_cm = result.get("sign_h_cm", 0)
+                dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+                default_desc = (
+                    "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                    "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                    f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
+                )
+                self._desc_per_tab[1] = default_desc
+                self.desc_text.delete("1.0", "end")
+                self.desc_text.insert("1.0", default_desc)
+            elif self._active_tab == 0 and self.desc_text:
+                self.desc_text.delete("1.0", "end")
 
         threading.Thread(target=worker, daemon=True).start()
 
