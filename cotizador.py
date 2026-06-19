@@ -1105,8 +1105,6 @@ def _draw_reg_marks_canvas(cv, ox, oy, pw, ph,
         y0 = cy + dy * gap
         y1 = cy + dy * (gap + arm)
         cv.create_line(cx, y0, cx, y1, fill=color, width=1)
-        # small circle at exact corner
-        cv.create_oval(cx-2, cy-2, cx+2, cy+2, fill=color, outline="")
 
 
 def _reg_marks_svg(pw_cm, ph_cm, arm_cm=1.5, gap_cm=0.0, y0=0.0):
