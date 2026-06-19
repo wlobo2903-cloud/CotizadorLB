@@ -1537,29 +1537,36 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
                     Paragraph(money(unit), s_right),
                     Paragraph(money(imp),  s_right)]
 
-        cfg_p = r.get("precios", {})
+        def _unit(imp, qty):
+            """Precio unitario = importe / cantidad, evitando división entre cero."""
+            try:
+                q = float(qty)
+                return imp / q if q else imp
+            except (TypeError, ValueError):
+                return imp
+
         if r.get("c_acrilico", 0):
             items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
-                f"{r['n_acrilico']:.3f}", cfg_p.get("acrilico_lamina",0), r["c_acrilico"]))
+                f"{r['n_acrilico']:.3f}", _unit(r["c_acrilico"], r["n_acrilico"]), r["c_acrilico"]))
         if r.get("c_pvc6", 0):
             items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
-                f"{r['n_pvc6']:.3f}", cfg_p.get("pvc6_lamina",0), r["c_pvc6"]))
+                f"{r['n_pvc6']:.3f}", _unit(r["c_pvc6"], r["n_pvc6"]), r["c_pvc6"]))
         if r.get("c_aluminio", 0):
             items_rows.append(_row("Spec (+40% merma)",
-                f"{r['n_aluminio']:.3f}", cfg_p.get("aluminio_lamina",0), r["c_aluminio"]))
+                f"{r['n_aluminio']:.3f}", _unit(r["c_aluminio"], r["n_aluminio"]), r["c_aluminio"]))
         if r.get("c_pvc2", 0):
             items_rows.append(_row("PVC 2mm (+40% merma)",
-                f"{r['n_pvc2']:.3f}", cfg_p.get("pvc2_lamina",0), r["c_pvc2"]))
+                f"{r['n_pvc2']:.3f}", _unit(r["c_pvc2"], r["n_pvc2"]), r["c_pvc2"]))
         if r.get("c_leds", 0):
             items_rows.append(_row("Tira LED 5m (rollo)",
-                f"{r.get('n_rollos',0):.3f}", cfg_p.get("led_rollo",0), r["c_leds"]))
+                f"{r.get('n_rollos',0):.3f}", _unit(r["c_leds"], r.get("n_rollos", 1)), r["c_leds"]))
         if r.get("c_fuente", 0):
             fu = r.get("fuente", {})
             items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
                 1, r["c_fuente"], r["c_fuente"]))
         if r.get("c_mano", 0):
             items_rows.append(_row("Mano de obra (letras)",
-                r.get("n_letters",0), cfg_p.get("mano_obra_letra",0), r["c_mano"]))
+                r.get("n_letters", 0), _unit(r["c_mano"], r.get("n_letters", 1)), r["c_mano"]))
         if r.get("c_instalacion", 0):
             items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
         if r.get("c_vinil", 0):
