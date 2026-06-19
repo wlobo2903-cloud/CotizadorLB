@@ -1543,13 +1543,13 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
 
         cfg_p = r.get("precios", {})
         if r.get("c_acrilico", 0):
-            items_rows.append(_row("Acrílico transparente (lám. 240×120 cm)",
+            items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
                 f"{r['n_acrilico']:.3f}", cfg_p.get("acrilico_lamina",0), r["c_acrilico"]))
         if r.get("c_pvc6", 0):
             items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
                 f"{r['n_pvc6']:.3f}", cfg_p.get("pvc6_lamina",0), r["c_pvc6"]))
         if r.get("c_aluminio", 0):
-            items_rows.append(_row("Aluminio calibre 22 (+40% merma)",
+            items_rows.append(_row("Spec (+40% merma)",
                 f"{r['n_aluminio']:.3f}", cfg_p.get("aluminio_lamina",0), r["c_aluminio"]))
         if r.get("c_pvc2", 0):
             items_rows.append(_row("PVC 2mm (+40% merma)",
@@ -1665,7 +1665,7 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
                spaceBefore=10, spaceAfter=4)
 
     story.append(PageBreak())
-    story.append(Paragraph("Nesting — Acrílico / PVC 6mm", s_img))
+    story.append(Paragraph("Nesting — Acrílico Z2 / PVC 6mm", s_img))
     story.append(pil_to_rl(_pil_nesting_image(placements, n_pieces, piece_sizes, scale=5), PW))
     SP(14)
     story.append(Paragraph("Distribución — Aluminio (tiras 5 cm)", s_img))
@@ -3036,7 +3036,7 @@ class SettingsWindow(tk.Toplevel):
             row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12,4))
         self.mat_vars = {}
         fields = [
-            ("Lámina acrílico 240×120 (MXN)",  "acrilico_lamina"),
+            ("Lámina Acrílico Z2 240×120 (MXN)",  "acrilico_lamina"),
             ("Lámina aluminio 240×120 (MXN)",   "aluminio_lamina"),
             ("Lámina PVC 6mm 240×120 (MXN)",    "pvc6_lamina"),
             ("Lámina PVC 2mm 240×120 (MXN)",    "pvc2_lamina"),
@@ -3456,15 +3456,15 @@ class App(tk.Tk):
         billing    = n_xl*4 + n_full*1 + n_half*0.5
         n_lam      = billing / 4
         piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
-        row("Piezas acrilico / PVC 6mm", piezas_txt)
-        row("Laminas acrilico 240x120",
+        row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
+        row("Laminas Acrílico Z2 240x120",
             f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
         row("Laminas PVC 6mm 240x120",
             f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
         sep()
 
         row("Area aluminio", f"{r['area_al_cm2']:.0f} cm2")
-        row("Laminas aluminio (+40% merma)",
+        row("Laminas Spec (+40% merma)",
             f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
         row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
         row("Laminas PVC 2mm (+40% merma)",
