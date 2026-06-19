@@ -2515,43 +2515,28 @@ class NestingWindow(tk.Toplevel):
                       command=do_export).pack(pady=(12, 18), padx=24)
 
     def _relayout_piece(self, pi):
-        """Re-run nesting for all letters in a given piece using current piece dimensions."""
-        if not self._letter_data:
-            return
-        scale      = self._nest_scale
+        """Re-pack all letters of a piece in rows using their actual_w/actual_h (cm)."""
         _, _, pw_cm, ph_cm = self._piece_dims(pi)
-        # Collect letter indices that live in this piece
-        in_piece   = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
+        in_piece = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
         if not in_piece:
             return
-        # Build local letter_data for these placements (match by name)
-        name_map   = {ld["name"]: ld for ld in self._letter_data}
-        local_data = []
-        for idx in in_piece:
-            name = self.placements[idx].get("name", "")
-            if name in name_map:
-                local_data.append(name_map[name])
-        if not local_data:
-            return
-        # Simple row-pack re-layout within piece bounds
+        GAP    = 0.5   # cm gap between letters
         margin = PIECE_MARGIN
         gx, gy = margin, margin
         row_h  = 0.0
-        for ld in local_data:
-            w_cm = ld["bbox_size_px"][0] * scale
-            h_cm = ld["bbox_size_px"][1] * scale
-            if gx + w_cm + margin > pw_cm and gx > margin:
-                gx  = margin
-                gy += row_h + margin
-                row_h = 0.0
-            # Update matching placement
-            for idx in in_piece:
-                if self.placements[idx].get("name", "") == ld["name"]:
-                    self.placements[idx]["x"] = gx
-                    self.placements[idx]["y"] = gy
-                    break
-            gx    += w_cm + margin
-            row_h  = max(row_h, h_cm)
+        for idx in in_piece:
+            pl    = self.placements[idx]
+            w_cm  = pl["actual_w"]
+            h_cm  = pl["actual_h"]
+            # wrap to next row if needed
+            if gx + w_cm > pw_cm - margin and gx > margin:
+                gx     = margin
+                gy    += row_h + GAP
+                row_h  = 0.0
+            pl["x"]  = gx
+            pl["y"]  = gy
+            gx       += w_cm + GAP
+            row_h     = max(row_h, h_cm)
         self._render()
         self._notify()
 
