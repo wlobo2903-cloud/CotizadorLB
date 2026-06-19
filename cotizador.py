@@ -3415,23 +3415,56 @@ class App(tk.Tk):
             "<MouseWheel>",
             lambda e: self._res_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
-        # ── Notebook de tipos de anuncio ──────────────────────────────────
-        nb_style = ttk.Style()
-        nb_style.configure("Results.TNotebook",        background=BG2, borderwidth=0)
-        nb_style.configure("Results.TNotebook.Tab",    background="#e0e0e0", foreground="#444444",
-                                                        padding=[14, 6], font=("Segoe UI", 9))
-        nb_style.map("Results.TNotebook.Tab",          background=[("selected", BG2)],
-                                                        foreground=[("selected", "#111111")])
+        # ── Tabs de tipos de anuncio (colores por tab) ───────────────────
+        TABS = [
+            {"name": "Acrílico con acrílico", "color": "#4f86c6", "bg": "#eef4fc"},
+            {"name": "Aluminio con acrílico",  "color": "#3aaa6a", "bg": "#edfaf3"},
+        ]
 
-        self._nb = ttk.Notebook(outer, style="Results.TNotebook")
-        self._nb.pack(fill="both", expand=True, padx=0, pady=0)
+        tab_bar = tk.Frame(outer, bg=BG2)
+        tab_bar.pack(fill="x")
 
-        TAB_NAMES = ["Acrílico con acrílico", "Aluminio con acrílico"]
+        content_area = tk.Frame(outer, bg=BG2)
+        content_area.pack(fill="both", expand=True)
+
         self.res_frames = []
-        for name in TAB_NAMES:
-            f = tk.Frame(self._nb, bg=BG2, padx=24, pady=24)
-            self._nb.add(f, text=f"  {name}  ")
+        self._tab_btns  = []
+
+        for t in TABS:
+            f = tk.Frame(content_area, bg=t["bg"], padx=24, pady=24)
             self.res_frames.append(f)
+
+        def _switch_tab(idx):
+            for i, (f, btn_data) in enumerate(zip(self.res_frames, self._tab_btns)):
+                if i == idx:
+                    f.place(relx=0, rely=0, relwidth=1, relheight=1)
+                    btn_data["btn"].config(
+                        bg=TABS[i]["color"], fg="#ffffff",
+                        relief="flat", font=("Segoe UI", 9, "bold"))
+                    btn_data["bar"].config(bg=TABS[i]["color"])
+                else:
+                    f.place_forget()
+                    btn_data["btn"].config(
+                        bg="#e0e0e0", fg="#555555",
+                        relief="flat", font=("Segoe UI", 9))
+                    btn_data["bar"].config(bg="#e0e0e0")
+
+        for i, t in enumerate(TABS):
+            col = tk.Frame(tab_bar, bg=BG2)
+            col.pack(side="left", padx=(0, 2))
+            btn = tk.Button(col, text=f"  {t['name']}  ",
+                            bg="#e0e0e0", fg="#555555",
+                            relief="flat", bd=0,
+                            font=("Segoe UI", 9),
+                            cursor="hand2", padx=10, pady=6,
+                            command=lambda idx=i: _switch_tab(idx))
+            btn.pack()
+            bar = tk.Frame(col, height=3, bg="#e0e0e0")
+            bar.pack(fill="x")
+            self._tab_btns.append({"btn": btn, "bar": bar})
+
+        content_area.pack_propagate(False)
+        _switch_tab(0)
 
         # Alias para compatibilidad con código existente (tab activo)
         self.res_frame = self.res_frames[0]
@@ -3448,7 +3481,7 @@ class App(tk.Tk):
             tk.Label(
                 rf,
                 text="Abre un archivo SVG e ingresa el ancho real para cotizar.",
-                bg="#f5f5f5", fg="#aaaaaa", font=("Segoe UI", 10, "italic")
+                bg=rf.cget("bg"), fg="#aaaaaa", font=("Segoe UI", 10, "italic")
             ).pack(pady=40)
 
     def _open_file(self):
@@ -3484,7 +3517,7 @@ class App(tk.Tk):
         for rf in self.res_frames:
             for w in rf.winfo_children():
                 w.destroy()
-            tk.Label(rf, text=msg, bg="#f5f5f5", fg="#4f86c6",
+            tk.Label(rf, text=msg, bg=rf.cget("bg"), fg="#4f86c6",
                      font=("Segoe UI", 10)).pack(anchor="w")
 
     def _calcular(self):
@@ -3535,7 +3568,7 @@ class App(tk.Tk):
         for w in res_frame.winfo_children():
             w.destroy()
 
-        bg  = "#f5f5f5"
+        bg  = res_frame.cget("bg")   # hereda el color del tab
         fg  = "#1a1a1a"
         fg2 = "#666666"
         acc = "#1a1a1a"
