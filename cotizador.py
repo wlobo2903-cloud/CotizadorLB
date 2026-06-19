@@ -421,12 +421,14 @@ ANGLES       = [0, 90, 180, 270]   # 4 orientaciones cardinales
 PIECE_CONFIGS = {
     "xl":   (120.0, 240.0),   # lámina completa 240×120 (orientación vertical)
     "full": (120.0,  60.0),   # cuarto de lámina 120×60
+    "tall": ( 60.0, 120.0),   # medio de lámina 60×120
     "half": ( 60.0,  60.0),   # octavo de lámina 60×60
 }
 # Equivalencia en unidades de 120×60 para cotización
 PIECE_BILLING = {
     "xl":   4.0,
     "full": 1.0,
+    "tall": 1.0,
     "half": 0.5,
 }
 
@@ -1223,13 +1225,15 @@ def _pil_nesting_image(placements, n_pieces, piece_sizes, scale=6):
         col, row = pi % COLS, pi // COLS
         psize = piece_sizes.get(pi, "full")
         is_half = psize == "half"
+        is_tall = psize == "tall"
         is_xl   = psize == "xl"
-        pw = int((PIECE_H if is_half else PIECE_W) * scale)
-        ph = int((PIECE_CONFIGS["xl"][1] if is_xl else PIECE_H) * scale)
+        pcw, pch = PIECE_CONFIGS.get(psize, PIECE_CONFIGS["full"])
+        pw = int(pcw * scale)
+        ph = int(pch * scale)
         ox = GAP + col * (PW + GAP)
         oy = GAP + row * (PH + GAP)
         draw.rectangle([ox, oy, ox+pw, oy+ph], fill="#ffffff", outline="#cccccc", width=2)
-        label = "60x60" if is_half else ("120x240" if is_xl else "120x60")
+        label = {"xl": "120x240", "full": "120x60", "tall": "60x120", "half": "60x60"}.get(psize, "120x60")
         draw.text((ox+4, oy+4), f"P{pi+1} ({label} cm)", fill="#aaaaaa")
 
     def _tc(px_, py_, cx_svg, cy_svg, sc, cos_a, sin_a, pcx, pcy):
@@ -2042,6 +2046,9 @@ class NestingWindow(tk.Toplevel):
         RoundedButton(top, text="+ 120x60", bg=NW_BG2, fg="#27ae60",
                       parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
                       command=lambda: self._add_piece("full")).pack(side="right", padx=2)
+        RoundedButton(top, text="+ 60x120", bg=NW_BG2, fg="#27ae60",
+                      parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
+                      command=lambda: self._add_piece("tall")).pack(side="right", padx=2)
         RoundedButton(top, text="+ 60x60", bg=NW_BG2, fg="#27ae60",
                       parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
                       command=lambda: self._add_piece("half")).pack(side="right", padx=2)
@@ -2127,7 +2134,7 @@ class NestingWindow(tk.Toplevel):
         S = self.S
 
         # Header: count pieces and compute sheet cost
-        counts = {"xl": 0, "full": 0, "half": 0}
+        counts = {"xl": 0, "full": 0, "tall": 0, "half": 0}
         for pi in range(self.n_pieces):
             counts[self.piece_sizes.get(pi, "full")] += 1
         billing = sum(counts[k] * PIECE_BILLING[k] for k in counts)
@@ -2135,6 +2142,7 @@ class NestingWindow(tk.Toplevel):
         parts   = []
         if counts["xl"]:   parts.append(f"{counts['xl']} × 240x120")
         if counts["full"]: parts.append(f"{counts['full']} × 120x60")
+        if counts["tall"]: parts.append(f"{counts['tall']} × 60x120")
         if counts["half"]: parts.append(f"{counts['half']} × 60x60")
         self.hdr.config(text="  +  ".join(parts) + f"  =  {n_lam:.3f} lám. 240x120")
 
@@ -2147,7 +2155,7 @@ class NestingWindow(tk.Toplevel):
         for pi in range(self.n_pieces):
             ox, oy = self._piece_origin(pi)
             pw, ph, _, _ = self._piece_dims(pi)
-            size_lbl = {"xl": "240x120", "full": "120x60", "half": "60x60"}.get(
+            size_lbl = {"xl": "240x120", "full": "120x60", "tall": "60x120", "half": "60x60"}.get(
                 self.piece_sizes.get(pi, "full"), "120x60")
             empty = not any(p["piece"] == pi for p in self.placements)
             self.cv.create_rectangle(ox, oy, ox+pw, oy+ph,
@@ -2422,7 +2430,7 @@ class NestingWindow(tk.Toplevel):
     # ── piece management ───────────────────────────────────────────────────
     def _notify(self):
         if self._on_change:
-            counts = {"xl": 0, "full": 0, "half": 0}
+            counts = {"xl": 0, "full": 0, "tall": 0, "half": 0}
             for pi in range(self.n_pieces):
                 counts[self.piece_sizes.get(pi, "full")] += 1
 
@@ -2438,7 +2446,7 @@ class NestingWindow(tk.Toplevel):
                 elif opts["vinil"].get():
                     c_vinil += units * self._vinil_unit
 
-            self._on_change(counts["xl"], counts["full"], counts["half"],
+            self._on_change(counts["xl"], counts["full"] + counts["tall"], counts["half"],
                             c_vinil=c_vinil)
 
     # ── export ─────────────────────────────────────────────────────────────
@@ -2495,7 +2503,7 @@ class NestingWindow(tk.Toplevel):
 
     def _cycle_piece(self, pi):
         cur = self.piece_sizes.get(pi, "full")
-        nxt = {"full": "xl", "xl": "half", "half": "full"}.get(cur, "full")
+        nxt = {"full": "xl", "xl": "tall", "tall": "half", "half": "full"}.get(cur, "full")
         self.piece_sizes[pi] = nxt
         _, _, pw_cm, ph_cm = self._piece_dims(pi)
         for pl in self.placements:
@@ -3581,12 +3589,14 @@ class App(tk.Tk):
 
         n_xl   = r.get("n_xl",   0)
         n_full = r.get("n_full", r["n_pieces"])
+        n_tall = r.get("n_tall", 0)
         n_half = r.get("n_half", 0)
         parts  = []
         if n_xl:   parts.append(f"{n_xl} × 240x120")
         if n_full: parts.append(f"{n_full} × 120x60")
+        if n_tall: parts.append(f"{n_tall} × 60x120")
         if n_half: parts.append(f"{n_half} × 60x60")
-        billing    = n_xl*4 + n_full*1 + n_half*0.5
+        billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
         n_lam      = billing / 4
         piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
         row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
@@ -3642,6 +3652,7 @@ class App(tk.Tk):
         placements = r.get("placements", [])
 
         def on_nesting_change(n_xl, n_full, n_half, c_vinil=0.0):
+            # n_full already includes tall pieces (both bill as 1 unit)
             billing         = n_xl * PIECE_BILLING["xl"] + \
                               n_full * PIECE_BILLING["full"] + \
                               n_half * PIECE_BILLING["half"]
