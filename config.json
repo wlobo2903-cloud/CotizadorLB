@@ -56,5 +56,9 @@
     "alto_cm": 60.0,
     "precio": 15.0
   },
-  "folio": 6001
+  "folio": 6009,
+  "empresa": {
+    "nombre": "Anuncios Luminosos LB",
+    "logo": "logo_lb.png"
+  }
 }

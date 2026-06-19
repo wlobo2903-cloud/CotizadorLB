@@ -1397,7 +1397,9 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     emp_email = empresa.get("email",    "")
     director  = empresa.get("director", "Ricardo Lobo Sáenz")
     cargo     = empresa.get("cargo",    "Director general")
-    logo_path = empresa.get("logo",     "")
+    logo_path = empresa.get("logo", "")
+    if logo_path and not os.path.isabs(logo_path):
+        logo_path = os.path.join(BASE_DIR, logo_path)
     iva_pct   = empresa.get("iva_pct",  16.0)
     isr_pct   = empresa.get("isr_pct",  1.25)
     vigencia  = empresa.get("vigencia_dias", 30)
