@@ -2156,14 +2156,6 @@ class NestingWindow(tk.Toplevel):
             self.cv.create_text(ox+6, oy+6, anchor="nw",
                 text=f"P{pi+1} ({size_lbl})",
                 fill="#aaaaaa", font=("Segoe UI", 8))
-            # Botón ⇄ en la esquina superior derecha de la pieza
-            btag = f"cycle_{pi}"
-            bx1, by1, bx2, by2 = ox+pw-46, oy+3, ox+pw-3, oy+19
-            self.cv.create_rectangle(bx1, by1, bx2, by2,
-                fill="#e8e8e8", outline="#bbbbbb", width=1, tags=btag)
-            self.cv.create_text((bx1+bx2)//2, (by1+by2)//2,
-                text="⇄ tamaño", fill="#555555",
-                font=("Segoe UI", 7), tags=btag)
             m = PIECE_MARGIN * S
             self.cv.create_rectangle(ox+m, oy+m, ox+pw-m, oy+ph-m,
                 outline="#dddddd", width=1, dash=(3,3))
@@ -2207,6 +2199,11 @@ class NestingWindow(tk.Toplevel):
                 self._notify()
 
             cb_frame = tk.Frame(self.cv, bg="#f5f5f5", bd=0)
+            tk.Button(cb_frame, text="⇄ tamaño",
+                      bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
+                      font=("Segoe UI", 8), cursor="hand2", pady=2,
+                      command=lambda p=pi: self._cycle_piece(p)
+                      ).pack(fill="x", pady=(0, 6))
             tk.Checkbutton(cb_frame, text="Vinil",
                            variable=opts["vinil"],
                            command=_on_vinil,
@@ -2318,23 +2315,6 @@ class NestingWindow(tk.Toplevel):
     def _on_click(self, event):
         x = self.cv.canvasx(event.x)
         y = self.cv.canvasy(event.y)
-
-        # Botón ⇄ por pieza
-        for item in self.cv.find_overlapping(x-2, y-2, x+2, y+2):
-            for tag in self.cv.gettags(item):
-                if tag.startswith("cycle_"):
-                    pi  = int(tag[6:])
-                    cur = self.piece_sizes.get(pi, "full")
-                    nxt = {"full": "xl", "xl": "half", "half": "full"}.get(cur, "full")
-                    self.piece_sizes[pi] = nxt
-                    _, _, pw_cm, ph_cm = self._piece_dims(pi)
-                    for pl in self.placements:
-                        if pl["piece"] == pi:
-                            pl["x"] = max(PIECE_MARGIN, min(pl["x"], pw_cm - PIECE_MARGIN - pl["actual_w"]))
-                            pl["y"] = max(PIECE_MARGIN, min(pl["y"], ph_cm - PIECE_MARGIN - pl["actual_h"]))
-                    self._render()
-                    self._notify()
-                    return
 
         found = None
         for item in reversed(self.cv.find_overlapping(x-6, y-6, x+6, y+6)):
@@ -2512,6 +2492,18 @@ class NestingWindow(tk.Toplevel):
                       bg="#111111", fg="#ffffff", parent_bg=win.cget("bg"),
                       font=("Segoe UI", 10, "bold"), padx=16, pady=8,
                       command=do_export).pack(pady=(12, 18), padx=24)
+
+    def _cycle_piece(self, pi):
+        cur = self.piece_sizes.get(pi, "full")
+        nxt = {"full": "xl", "xl": "half", "half": "full"}.get(cur, "full")
+        self.piece_sizes[pi] = nxt
+        _, _, pw_cm, ph_cm = self._piece_dims(pi)
+        for pl in self.placements:
+            if pl["piece"] == pi:
+                pl["x"] = max(PIECE_MARGIN, min(pl["x"], pw_cm - PIECE_MARGIN - pl["actual_w"]))
+                pl["y"] = max(PIECE_MARGIN, min(pl["y"], ph_cm - PIECE_MARGIN - pl["actual_h"]))
+        self._render()
+        self._notify()
 
     def _add_piece(self, size="full"):
         self.piece_sizes[self.n_pieces] = size
