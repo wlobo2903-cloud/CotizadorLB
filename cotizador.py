@@ -2211,11 +2211,19 @@ class NestingWindow(tk.Toplevel):
                 self._notify()
 
             cb_frame = tk.Frame(self.cv, bg="#f5f5f5", bd=0)
-            tk.Button(cb_frame, text="⇄ tamaño",
+            def _show_size_menu(event, p=pi, frm=cb_frame):
+                menu = tk.Menu(frm, tearoff=0)
+                labels = [("full","120×60"), ("xl","120×240"), ("tall","60×120"), ("half","60×60")]
+                cur = self.piece_sizes.get(p, "full")
+                for key, label in labels:
+                    txt = f"✓  {label}" if key == cur else f"    {label}"
+                    menu.add_command(label=txt, command=lambda k=key: self._set_piece_size(p, k))
+                menu.tk_popup(event.x_root, event.y_root)
+            size_btn = tk.Button(cb_frame, text="⇄ tamaño",
                       bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
-                      font=("Segoe UI", 8), cursor="hand2", pady=2,
-                      command=lambda p=pi: self._cycle_piece(p)
-                      ).pack(fill="x", pady=(0, 6))
+                      font=("Segoe UI", 8), cursor="hand2", pady=2)
+            size_btn.bind("<Button-1>", _show_size_menu)
+            size_btn.pack(fill="x", pady=(0, 6))
             tk.Checkbutton(cb_frame, text="Vinil",
                            variable=opts["vinil"],
                            command=_on_vinil,
@@ -2505,10 +2513,8 @@ class NestingWindow(tk.Toplevel):
                       font=("Segoe UI", 10, "bold"), padx=16, pady=8,
                       command=do_export).pack(pady=(12, 18), padx=24)
 
-    def _cycle_piece(self, pi):
-        cur = self.piece_sizes.get(pi, "full")
-        nxt = {"full": "xl", "xl": "tall", "tall": "half", "half": "full"}.get(cur, "full")
-        self.piece_sizes[pi] = nxt
+    def _set_piece_size(self, pi, size):
+        self.piece_sizes[pi] = size
         _, _, pw_cm, ph_cm = self._piece_dims(pi)
         for pl in self.placements:
             if pl["piece"] == pi:
@@ -2516,6 +2522,11 @@ class NestingWindow(tk.Toplevel):
                 pl["y"] = max(PIECE_MARGIN, min(pl["y"], ph_cm - PIECE_MARGIN - pl["actual_h"]))
         self._render()
         self._notify()
+
+    def _cycle_piece(self, pi):
+        cur = self.piece_sizes.get(pi, "full")
+        nxt = {"full": "xl", "xl": "tall", "tall": "half", "half": "full"}.get(cur, "full")
+        self._set_piece_size(pi, nxt)
 
     def _add_piece(self, size="full"):
         self.piece_sizes[self.n_pieces] = size
