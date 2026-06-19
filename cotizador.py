@@ -397,7 +397,8 @@ def parse_svg(filepath):
             }
         )
 
-    return svg_w, letters
+    svg_w_cm = svg_w / 72 * 2.54   # Illustrator viewBox units are pts (1pt = 1/72 in)
+    return svg_w, letters, svg_w_cm
 
 
 # ---------------------------------------------------------------------------
@@ -3192,9 +3193,11 @@ class App(tk.Tk):
         self.configure(bg="#111111")
 
         self.cfg = load_config()
-        self.svg_w_px = None
-        self.letters = []
-        self.svg_path = tk.StringVar(value="")
+        self.svg_w_px    = None
+        self.svg_w_cm    = None   # ancho base del SVG en cm
+        self.letters     = []
+        self.svg_path    = tk.StringVar(value="")
+        self._updating   = False  # guard para evitar loops en los traces
 
         # Client / project fields (persist across sessions)
         self.cliente_var   = tk.StringVar()
@@ -3261,12 +3264,56 @@ class App(tk.Tk):
                       padx=10, pady=5, command=self._open_file).pack(side="left")
 
         tk.Frame(left, bg=BG, height=10).pack()
-        tk.Label(left, text="Ancho real (cm)", bg=BG, fg=FG2,
+        dim_row = tk.Frame(left, bg=BG)
+        dim_row.pack(anchor="w", fill="x")
+        # Ancho
+        w_col = tk.Frame(dim_row, bg=BG)
+        w_col.pack(side="left", padx=(0, 8))
+        tk.Label(w_col, text="Ancho real (cm)", bg=BG, fg=FG2,
                  font=("Segoe UI", 8)).pack(anchor="w")
         self.width_var = tk.StringVar()
-        RoundedEntry(left, textvariable=self.width_var,
+        RoundedEntry(w_col, textvariable=self.width_var,
                      bg=BG3, fg=FG, parent_bg=BG,
-                     font=("Segoe UI", 10), width=10).pack(anchor="w", pady=(3, 0))
+                     font=("Segoe UI", 10), width=9).pack(anchor="w", pady=(3, 0))
+        # Escala
+        s_col = tk.Frame(dim_row, bg=BG)
+        s_col.pack(side="left")
+        tk.Label(s_col, text="Escala (%)", bg=BG, fg=FG2,
+                 font=("Segoe UI", 8)).pack(anchor="w")
+        self.escala_var = tk.StringVar(value="100")
+        RoundedEntry(s_col, textvariable=self.escala_var,
+                     bg=BG3, fg=FG, parent_bg=BG,
+                     font=("Segoe UI", 10), width=6).pack(anchor="w", pady=(3, 0))
+
+        # Traces bidireccionales
+        def _on_width_change(*_):
+            if self._updating or not self.svg_w_cm:
+                return
+            try:
+                w = float(self.width_var.get().replace(",", "."))
+                pct = round(w / self.svg_w_cm * 100, 2)
+                self._updating = True
+                self.escala_var.set(str(pct))
+            except ValueError:
+                pass
+            finally:
+                self._updating = False
+
+        def _on_escala_change(*_):
+            if self._updating or not self.svg_w_cm:
+                return
+            try:
+                pct = float(self.escala_var.get().replace(",", "."))
+                w = round(self.svg_w_cm * pct / 100, 3)
+                self._updating = True
+                self.width_var.set(str(w))
+            except ValueError:
+                pass
+            finally:
+                self._updating = False
+
+        self.width_var.trace_add("write", _on_width_change)
+        self.escala_var.trace_add("write", _on_escala_change)
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
@@ -3372,8 +3419,14 @@ class App(tk.Tk):
             )
             return
         try:
-            self.svg_w_px, self.letters = parse_svg(path)
+            self.svg_w_px, self.letters, self.svg_w_cm = parse_svg(path)
             self.svg_path.set(os.path.basename(path))
+            # Auto-fill width and reset scale to 100%
+            if self.svg_w_cm:
+                self._updating = True
+                self.width_var.set(f"{self.svg_w_cm:.3f}")
+                self.escala_var.set("100")
+                self._updating = False
             n = len(self.letters)
             names = ", ".join(l["name"] for l in self.letters[:6])
             if n > 6:
