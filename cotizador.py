@@ -3204,7 +3204,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("Anuncios Luminosos LB")
         self.resizable(True, True)
-        self.minsize(480, 400)
+        self.minsize(900, 600)
+        self.geometry("1200x800")
         self.configure(bg="#111111")
 
         self.cfg = load_config()
