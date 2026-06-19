@@ -950,11 +950,11 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_pvc2 = (area_pvc2_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
     c_pvc2 = n_pvc2 * p.get("pvc2_lamina", 0)
 
-    c_mano = n_letters * p["mano_obra_letra"]
+    c_fee         = p.get("fee_asociado", 0)
+    c_mano = n_letters * p["mano_obra_letra"] + c_fee
     c_leds = n_rollos * p["led_rollo"]
     c_fuente      = fuente["precio"]
     c_instalacion = p.get("instalacion", 0)
-    c_fee         = p.get("fee_asociado", 0)
 
     # Papel plantilla — cubre el área total del anuncio en posición final
     all_y1 = [l["bbox_px"][1] for l in letters]
@@ -980,7 +980,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         c_vinil += units * (vinil_unit + (vinil_xtra if vstate == "transfer" else 0))
 
     total = (c_acrilico + c_aluminio + c_pvc6 + c_pvc2 +
-             c_mano + c_leds + c_fuente + c_instalacion + c_fee +
+             c_mano + c_leds + c_fuente + c_instalacion +
              c_basicos_total + c_papel + c_vinil)
 
     # Per-letter perimeters for aluminum visual
@@ -1564,8 +1564,6 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
                 r.get("n_letters",0), cfg_p.get("mano_obra_letra",0), r["c_mano"]))
         if r.get("c_instalacion", 0):
             items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
-        if r.get("c_fee", 0):
-            items_rows.append(_row("Fee / Comisión asociado", 1, r["c_fee"], r["c_fee"]))
         if r.get("c_vinil", 0):
             items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
         if r.get("c_papel", 0):
@@ -3491,7 +3489,6 @@ class App(tk.Tk):
         sep()
 
         row("Instalacion", fmt(r['c_instalacion']))
-        row("Fee asociado", fmt(r['c_fee']))
         pc = r.get("papel_cfg", {})
         row("Papel plantilla",
             f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
@@ -3536,7 +3533,7 @@ class App(tk.Tk):
             r["total"] = (r["c_acrilico"] + r["c_aluminio"] +
                           r["c_pvc6"] + r["c_pvc2"] +
                           r["c_mano"] + r["c_leds"] + r["c_fuente"] +
-                          r["c_instalacion"] + r["c_fee"] +
+                          r["c_instalacion"] +
                           r["c_basicos_total"] + r["c_vinil"])
             self._show_results(r)
 
