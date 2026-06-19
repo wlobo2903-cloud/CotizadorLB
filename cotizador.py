@@ -969,8 +969,9 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     sign_h_cm  = (max(all_y2) - min(all_y1)) * scale
     sign_area_cm2 = real_width_cm * sign_h_cm
     papel_cfg = cfg.get("papel_plantilla", {"ancho_cm": 90, "alto_cm": 120, "precio": 15})
-    papel_area_cm2 = papel_cfg["ancho_cm"] * papel_cfg["alto_cm"]
-    n_papel = math.ceil(sign_area_cm2 / papel_area_cm2)
+    # Contar pliegos por grilla física, no por área — el papel no se puede redistribuir
+    n_papel = (math.ceil(real_width_cm / papel_cfg["ancho_cm"]) *
+               math.ceil(sign_h_cm    / papel_cfg["alto_cm"]))
     c_papel = n_papel * papel_cfg["precio"]
 
     basicos = cfg.get("basicos", [])
