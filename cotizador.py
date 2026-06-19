@@ -3376,13 +3376,13 @@ class App(tk.Tk):
         vsb.grid(row=0, column=1, sticky="ns")
         self._res_canvas.configure(yscrollcommand=vsb.set)
 
-        res = tk.Frame(self._res_canvas, bg=BG2, padx=24, pady=24)
+        outer = tk.Frame(self._res_canvas, bg=BG2)
         self._res_window = self._res_canvas.create_window(
-            (0, 0), window=res, anchor="nw")
+            (0, 0), window=outer, anchor="nw")
 
-        res.bind("<Configure>",
-                 lambda e: self._res_canvas.configure(
-                     scrollregion=self._res_canvas.bbox("all")))
+        outer.bind("<Configure>",
+                   lambda e: self._res_canvas.configure(
+                       scrollregion=self._res_canvas.bbox("all")))
         self._res_canvas.bind("<Configure>",
                               lambda e: self._res_canvas.itemconfig(
                                   self._res_window, width=e.width))
@@ -3390,7 +3390,26 @@ class App(tk.Tk):
             "<MouseWheel>",
             lambda e: self._res_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
-        self.res_frame = res
+        # ── Notebook de tipos de anuncio ──────────────────────────────────
+        nb_style = ttk.Style()
+        nb_style.configure("Results.TNotebook",        background=BG2, borderwidth=0)
+        nb_style.configure("Results.TNotebook.Tab",    background="#e0e0e0", foreground="#444444",
+                                                        padding=[14, 6], font=("Segoe UI", 9))
+        nb_style.map("Results.TNotebook.Tab",          background=[("selected", BG2)],
+                                                        foreground=[("selected", "#111111")])
+
+        self._nb = ttk.Notebook(outer, style="Results.TNotebook")
+        self._nb.pack(fill="both", expand=True, padx=0, pady=0)
+
+        TAB_NAMES = ["Acrílico con acrílico", "Aluminio con acrílico"]
+        self.res_frames = []
+        for name in TAB_NAMES:
+            f = tk.Frame(self._nb, bg=BG2, padx=24, pady=24)
+            self._nb.add(f, text=f"  {name}  ")
+            self.res_frames.append(f)
+
+        # Alias para compatibilidad con código existente (tab activo)
+        self.res_frame = self.res_frames[0]
         self._result_placeholder()
 
     def _section_label(self, parent, text):
@@ -3398,13 +3417,14 @@ class App(tk.Tk):
                  font=("Segoe UI", 7, "bold")).pack(anchor="w")
 
     def _result_placeholder(self):
-        for w in self.res_frame.winfo_children():
-            w.destroy()
-        tk.Label(
-            self.res_frame,
-            text="Abre un archivo SVG e ingresa el ancho real para cotizar.",
-            bg="#f5f5f5", fg="#aaaaaa", font=("Segoe UI", 10, "italic")
-        ).pack(pady=40)
+        for rf in self.res_frames:
+            for w in rf.winfo_children():
+                w.destroy()
+            tk.Label(
+                rf,
+                text="Abre un archivo SVG e ingresa el ancho real para cotizar.",
+                bg="#f5f5f5", fg="#aaaaaa", font=("Segoe UI", 10, "italic")
+            ).pack(pady=40)
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -3436,10 +3456,11 @@ class App(tk.Tk):
             messagebox.showerror("Error al leer SVG", str(e))
 
     def _show_info(self, msg):
-        for w in self.res_frame.winfo_children():
-            w.destroy()
-        tk.Label(self.res_frame, text=msg, bg="#f5f5f5", fg="#4f86c6",
-                 font=("Segoe UI", 10)).pack(anchor="w")
+        for rf in self.res_frames:
+            for w in rf.winfo_children():
+                w.destroy()
+            tk.Label(rf, text=msg, bg="#f5f5f5", fg="#4f86c6",
+                     font=("Segoe UI", 10)).pack(anchor="w")
 
     def _calcular(self):
         if not self.letters:
@@ -3477,12 +3498,15 @@ class App(tk.Tk):
             if result is None:
                 messagebox.showerror("Error", "No se pudo calcular. Verifica el archivo SVG.")
                 return
-            self._show_results(result)
+            for rf in self.res_frames:
+                self._show_results(result, rf)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _show_results(self, r):
-        for w in self.res_frame.winfo_children():
+    def _show_results(self, r, res_frame=None):
+        if res_frame is None:
+            res_frame = self.res_frames[0]
+        for w in res_frame.winfo_children():
             w.destroy()
 
         bg  = "#f5f5f5"
@@ -3491,7 +3515,7 @@ class App(tk.Tk):
         acc = "#1a1a1a"
 
         def row(label, value, color=fg):
-            f = tk.Frame(self.res_frame, bg=bg)
+            f = tk.Frame(res_frame, bg=bg)
             f.pack(fill="x", pady=2)
             tk.Label(f, text=label, bg=bg, fg=fg2, width=36, anchor="w",
                      font=("Segoe UI", 10)).pack(side="left")
@@ -3499,9 +3523,9 @@ class App(tk.Tk):
                      font=("Segoe UI", 10, "bold")).pack(side="left")
 
         def sep():
-            tk.Frame(self.res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
+            tk.Frame(res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
-        tk.Label(self.res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
+        tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
 
         row("Letras detectadas", str(r["n_letters"]))
@@ -3549,7 +3573,7 @@ class App(tk.Tk):
             f"{fmt(r['c_papel'])}")
         sep()
 
-        tk.Label(self.res_frame, text="BASICOS", bg=bg, fg=acc,
+        tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
                  font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
         for nombre, precio in r.get("basicos", []):
             row(f"  {nombre}", fmt(precio))
@@ -3562,8 +3586,8 @@ class App(tk.Tk):
             sep()
 
         # Total label
-        tk.Frame(self.res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
-        tk.Label(self.res_frame, text=f"TOTAL:  {fmt(r['total'])}", bg=bg,
+        tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
+        tk.Label(res_frame, text=f"TOTAL:  {fmt(r['total'])}", bg=bg,
                  fg="#1a1a1a", font=("Segoe UI", 15, "bold")).pack(
                  anchor="w", pady=(0, 4))
 
@@ -3588,9 +3612,9 @@ class App(tk.Tk):
                           r["c_mano"] + r["c_leds"] + r["c_fuente"] +
                           r["c_instalacion"] +
                           r["c_basicos_total"] + r["c_vinil"])
-            self._show_results(r)
+            self._show_results(r, res_frame)
 
-        bottom = tk.Frame(self.res_frame, bg=bg)
+        bottom = tk.Frame(res_frame, bg=bg)
         bottom.pack(fill="x", pady=(10, 0))
 
         def _btn(parent, text, bg, fg, cmd, r=0, c=0):
