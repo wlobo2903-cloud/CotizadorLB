@@ -929,7 +929,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_aluminio = (area_al_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
 
     perim_m = total_perim_cm / 100.0
-    n_rollos = math.ceil(perim_m / 5.0)
+    n_rollos = perim_m / 5.0
     watts_total = n_rollos * 40
 
     fuente = max(cfg["fuentes"], key=lambda f: -f["watts"] if f["watts"] >= watts_total else float("-inf"))
@@ -1554,7 +1554,7 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
                 f"{r['n_pvc2']:.3f}", cfg_p.get("pvc2_lamina",0), r["c_pvc2"]))
         if r.get("c_leds", 0):
             items_rows.append(_row("Tira LED 5m (rollo)",
-                r.get("n_rollos",0), cfg_p.get("led_rollo",0), r["c_leds"]))
+                f"{r.get('n_rollos',0):.3f}", cfg_p.get("led_rollo",0), r["c_leds"]))
         if r.get("c_fuente", 0):
             fu = r.get("fuente", {})
             items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
@@ -3485,7 +3485,7 @@ class App(tk.Tk):
         row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
         sep()
 
-        row("Rollos LED (5m)", f"{r['n_rollos']}  →  {fmt(r['c_leds'])}")
+        row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
         row("Watts totales", f"{r['watts']} W")
         row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
         sep()
