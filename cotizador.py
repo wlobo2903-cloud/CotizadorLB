@@ -207,6 +207,7 @@ DEFAULT_CONFIG = {
         "fee_asociado":          0,
         "vinil_unit":          100,   # por unidad 120×60
         "vinil_transfer_extra":  60,  # extra si es con transfer
+        "esparragos_unit":      3.66, # precio por espárrago (4 por letra)
     },
     "papel_plantilla": {
         "ancho_cm": 120,
@@ -964,6 +965,9 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     c_leds = n_rollos * p["led_rollo"]
     c_fuente      = fuente["precio"]
     c_instalacion = p.get("instalacion", 0)
+    esparragos_unit = p.get("esparragos_unit", 3.66)
+    n_esparragos    = n_letters * 4
+    c_esparragos    = n_esparragos * esparragos_unit if cfg.get("con_esparragos", False) else 0.0
 
     # Papel plantilla — cubre el área total del anuncio en posición final
     all_y1 = [l["bbox_px"][1] for l in letters]
@@ -991,7 +995,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
 
     total = (c_acrilico + c_aluminio + c_pvc6 + c_pvc2 +
              c_mano + c_leds + c_fuente + c_instalacion +
-             c_basicos_total + c_papel + c_vinil)
+             c_basicos_total + c_papel + c_vinil + c_esparragos)
 
     # Per-letter perimeters for aluminum visual
     letter_perims_cm = [l["perimeter_px"] * scale for l in letters]
@@ -1083,6 +1087,8 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "n_papel": n_papel,
         "c_papel": c_papel,
         "papel_cfg": papel_cfg,
+        "n_esparragos": n_esparragos,
+        "c_esparragos": c_esparragos,
         "total": total,
     }
 
@@ -1586,6 +1592,10 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
             items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
         if r.get("c_vinil", 0):
             items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
+        if r.get("c_esparragos", 0):
+            n_esp = r.get("n_esparragos", 0)
+            u_esp = r["c_esparragos"] / n_esp if n_esp else 0
+            items_rows.append(_row("Espárragos", n_esp, u_esp, r["c_esparragos"]))
         if r.get("c_papel", 0):
             pc2 = r.get("papel_cfg", {})
             items_rows.append(_row(
@@ -3079,6 +3089,7 @@ class SettingsWindow(tk.Toplevel):
             ("Rollo LED 5m (MXN)",               "led_rollo"),
             ("Instalación (MXN)",                "instalacion"),
             ("Fee asociado (MXN)",               "fee_asociado"),
+            ("Espárrago unidad (MXN)",           "esparragos_unit"),
         ]
         for i, (lbl, key) in enumerate(fields, start=1):
             self.mat_vars[key] = self._price_row(f, i, lbl, key)
@@ -3244,10 +3255,11 @@ class App(tk.Tk):
         self.direccion_var = tk.StringVar()
         self.proyecto_var  = tk.StringVar()
         self.tipo_persona_var = tk.StringVar(value="Persona Física")
-        self.desc_text     = None   # tk.Text widget, assigned in _build
-        self._last_r       = None   # last calculate() result, for default descriptions
-        self._desc_per_tab = ["", ""]   # saved description text per tab index
-        self._active_tab   = 0
+        self.desc_text        = None
+        self._last_r          = None
+        self._desc_per_tab    = ["", ""]
+        self._active_tab      = 0
+        self.esparragos_var   = tk.BooleanVar(value=False)
 
         self._build()
 
@@ -3392,6 +3404,13 @@ class App(tk.Tk):
         self.desc_text.pack(anchor="w", pady=(2, 0))
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
+
+        # ── Opciones adicionales ──────────────────────────────────────────
+        tk.Checkbutton(left, text="Espárragos (4 por letra)",
+                       variable=self.esparragos_var,
+                       bg=BG, fg=FG, selectcolor=BG3, activebackground=BG,
+                       font=("Segoe UI", 9), cursor="hand2"
+                       ).pack(anchor="w", pady=(0, 10))
 
         # ── Botones acción ────────────────────────────────────────────────
         RoundedButton(left, text="Calcular cotización",
@@ -3586,7 +3605,9 @@ class App(tk.Tk):
         container = [None]
 
         def worker():
-            container[0] = calculate(self.svg_w_px, self.letters, rw, self.cfg)
+            cfg_calc = dict(self.cfg)
+            cfg_calc["con_esparragos"] = self.esparragos_var.get()
+            container[0] = calculate(self.svg_w_px, self.letters, rw, cfg_calc)
             self.after(0, done)
 
         def done():
@@ -3703,6 +3724,11 @@ class App(tk.Tk):
             row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
             sep()
 
+        c_esp = r.get("c_esparragos", 0.0)
+        if c_esp > 0:
+            row(f"Espárragos ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
+            sep()
+
         # Total label
         tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
         tk.Label(res_frame, text=f"TOTAL:  {fmt(r['total'])}", bg=bg,
@@ -3730,7 +3756,8 @@ class App(tk.Tk):
                           r["c_pvc6"] + r["c_pvc2"] +
                           r["c_mano"] + r["c_leds"] + r["c_fuente"] +
                           r["c_instalacion"] +
-                          r["c_basicos_total"] + r["c_vinil"])
+                          r["c_basicos_total"] + r["c_vinil"] +
+                          r.get("c_esparragos", 0.0))
             self._show_results(r, res_frame)
 
         bottom = tk.Frame(res_frame, bg=bg)

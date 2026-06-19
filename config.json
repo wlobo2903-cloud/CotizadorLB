@@ -9,7 +9,8 @@
     "instalacion": 3500.0,
     "fee_asociado": 140.0,
     "vinil_unit": 100.0,
-    "vinil_transfer_extra": 60.0
+    "vinil_transfer_extra": 60.0,
+    "esparragos_unit": 3.66
   },
   "fuentes": [
     {
@@ -56,7 +57,7 @@
     "alto_cm": 60.0,
     "precio": 15.0
   },
-  "folio": 6009,
+  "folio": 6010,
   "empresa": {
     "nombre": "Anuncios Luminosos LB",
     "logo": "logo_lb.png"
