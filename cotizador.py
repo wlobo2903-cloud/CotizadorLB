@@ -2560,17 +2560,25 @@ class NestingWindow(tk.Toplevel):
 
     def _relayout_piece(self, pi):
         """Re-nest letters of a piece using the same shelf algorithm as the initial calculation."""
+        print(f"[relayout] pi={pi} letter_data={len(self._letter_data)} placements={len(self.placements)}")
         if not self._letter_data:
+            print("[relayout] STOP: no letter_data")
             return
         in_piece = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
+        print(f"[relayout] in_piece={in_piece}")
         if not in_piece:
+            print("[relayout] STOP: no placements in piece")
             return
 
         # Collect letter_data entries for letters in this piece (match by name)
         name_map    = {ld["name"]: ld for ld in self._letter_data}
+        print(f"[relayout] name_map keys={list(name_map.keys())[:5]}")
+        print(f"[relayout] placement names={[self.placements[i].get('name') for i in in_piece]}")
         local_data  = [name_map[self.placements[i]["name"]]
                        for i in in_piece if self.placements[i]["name"] in name_map]
+        print(f"[relayout] local_data count={len(local_data)}")
         if not local_data:
+            print("[relayout] STOP: name mismatch")
             return
 
         _, _, pw_cm, ph_cm = self._piece_dims(pi)
@@ -3786,7 +3794,9 @@ class App(tk.Tk):
                  on_change=on_nesting_change,
                  piece_sizes=r["piece_sizes"],
                  piece_vinil=r.get("piece_vinil", {}),
-                 vinil_prices=r.get("vinil_prices", {})),
+                 vinil_prices=r.get("vinil_prices", {}),
+                 letter_data=r.get("letter_data", []),
+                 nest_scale=r.get("nest_scale", 1.0)),
              r=0, c=0)
         _btn(bottom, "Ver aluminio", "#e8e8e8", "#1a1a1a",
              lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
@@ -3804,10 +3814,12 @@ class App(tk.Tk):
 
         # r["piece_sizes"] is the shared dict — always use it for PDF too
         def _on_nesting_open():
+            ld = r.get("letter_data", [])
+            print(f"[nesting_open] letter_data len={len(ld)} nest_scale={r.get('nest_scale')}")
             return NestingWindow(self, r["n_pieces"], placements, r["n_acrilico"],
                                  on_change=on_nesting_change,
                                  piece_sizes=r["piece_sizes"],
-                                 letter_data=r.get("letter_data", []),
+                                 letter_data=ld,
                                  nest_scale=r.get("nest_scale", 1.0))
 
         def _export_pdf():
