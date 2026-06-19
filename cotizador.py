@@ -1,3 +1,4 @@
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from tkinter.font import Font as _TkFont
@@ -186,7 +187,12 @@ class RoundedText(tk.Canvas):
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# When frozen by PyInstaller --onefile, sys.executable is the actual .exe path;
+# __file__ would point to the temp extraction folder (_MEIPASS) which is deleted on exit.
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 DEFAULT_CONFIG = {
