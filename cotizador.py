@@ -1419,9 +1419,11 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     today_long = f"{today.day} de {_meses[today.month-1]} de {today.year}"
     vence = (today + datetime.timedelta(days=vigencia)).strftime("%d/%m/%Y")
 
+    tipo_persona = r.get("tipo_persona", "Persona Física")
+    aplica_isr   = tipo_persona == "Persona Moral"
     subtotal   = r.get("total", 0.0)
-    iva        = subtotal * iva_pct  / 100
-    isr        = subtotal * isr_pct  / 100
+    iva        = subtotal * iva_pct / 100
+    isr        = subtotal * isr_pct / 100 if aplica_isr else 0.0
     imp_neto   = iva - isr
     total_gral = subtotal + imp_neto
 
@@ -1611,11 +1613,18 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
 
     # ── Totales ───────────────────────────────────────────────────────────
     tot_rows = [
-        [Paragraph("Sub Total:",                    s_norm),   Paragraph(money(subtotal),  s_right)],
-        [Paragraph(f"IVA ({iva_pct:.0f}%):",        s_norm),   Paragraph(money(iva),       s_right)],
-        [Paragraph(f"Retención ISR ({isr_pct:.2f}%):", s_norm),Paragraph(f"- {money(isr)}",s_right)],
-        [Paragraph("Total General:",                s_bold10), Paragraph(money(total_gral),s_right_b)],
+        [Paragraph("Sub Total:",             s_norm),   Paragraph(money(subtotal),  s_right)],
+        [Paragraph(f"IVA ({iva_pct:.0f}%):", s_norm),   Paragraph(money(iva),       s_right)],
     ]
+    if aplica_isr:
+        tot_rows.append([
+            Paragraph(f"Retención ISR ({isr_pct:.2f}%):", s_norm),
+            Paragraph(f"- {money(isr)}", s_right),
+        ])
+    tot_rows.append([
+        Paragraph("Total General:", s_bold10),
+        Paragraph(money(total_gral), s_right_b),
+    ])
     tot_tbl = Table(tot_rows, colWidths=[PW*0.78, PW*0.22])
     tot_tbl.setStyle(TableStyle([
         ("ALIGN",         (1,0),(-1,-1), "RIGHT"),
@@ -3514,6 +3523,7 @@ class App(tk.Tk):
             if result is None:
                 messagebox.showerror("Error", "No se pudo calcular. Verifica el archivo SVG.")
                 return
+            result["tipo_persona"] = self.tipo_persona_var.get()
             for rf in self.res_frames:
                 self._show_results(result, rf)
 
