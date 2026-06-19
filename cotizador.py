@@ -1517,7 +1517,13 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     story.append(Paragraph(
         "Tenemos el gusto de dirigirnos a usted para poner a su disposición el siguiente presupuesto.",
         s_norm))
-    SP(10)
+    SP(8)
+
+    if desc_txt and desc_txt.strip():
+        story.append(Paragraph(
+            desc_txt.strip().replace("\n", "<br/>"),
+            _s("desc_comp", fontSize=9, leading=13, textColor=colors.HexColor("#333333"))))
+        SP(8)
 
     # ── Tabla de items ────────────────────────────────────────────────────
     th_style = _s("th2", fontName="Helvetica-Bold", fontSize=8, textColor=BLACK)
@@ -1579,15 +1585,6 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
         for bn, bv in r.get("basicos", []):
             items_rows.append(_row(bn, 1, bv, bv))
 
-        # Descripción complementaria al final del desglose
-        if desc_txt and desc_txt.strip():
-            items_rows.append([
-                Paragraph(f"<i>{desc_txt.strip().replace(chr(10), '<br/>')}</i>",
-                          _s("dsc", fontSize=8, textColor=GRAY, leading=12)),
-                Paragraph("", s_norm),
-                Paragraph("", s_norm),
-                Paragraph("", s_norm),
-            ])
 
     cw = [PW*0.54, PW*0.09, PW*0.18, PW*0.19]
     items_tbl = Table(items_rows, colWidths=cw, repeatRows=1)
