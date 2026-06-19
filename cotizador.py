@@ -1529,19 +1529,8 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     ]
     items_rows = [hrow]
 
-    if desc_txt:
-        # Descripción libre ingresada por el usuario → una fila por párrafo
-        for block in desc_txt.split("\n\n"):
-            block = block.strip()
-            if block:
-                items_rows.append([
-                    Paragraph(block.replace("\n", "<br/>"), s_norm),
-                    Paragraph("1", _s("c1", alignment=1)),
-                    Paragraph(money(subtotal), s_right),
-                    Paragraph(money(subtotal), s_right),
-                ])
-    else:
-        # Sin descripción → mostrar desglose automático (solo conceptos con costo > 0)
+    # Desglose automático (siempre visible)
+    if True:
         def _row(desc, cant, unit, imp):
             return [Paragraph(desc, s_norm),
                     Paragraph(str(cant), _s("c1", alignment=1)),
@@ -1582,6 +1571,16 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
                 r.get("n_papel",0), pc2.get("precio",0), r["c_papel"]))
         for bn, bv in r.get("basicos", []):
             items_rows.append(_row(bn, 1, bv, bv))
+
+        # Descripción complementaria al final del desglose
+        if desc_txt and desc_txt.strip():
+            items_rows.append([
+                Paragraph(f"<i>{desc_txt.strip().replace(chr(10), '<br/>')}</i>",
+                          _s("dsc", fontSize=8, textColor=GRAY, leading=12)),
+                Paragraph("", s_norm),
+                Paragraph("", s_norm),
+                Paragraph("", s_norm),
+            ])
 
     cw = [PW*0.54, PW*0.09, PW*0.18, PW*0.19]
     items_tbl = Table(items_rows, colWidths=cw, repeatRows=1)
