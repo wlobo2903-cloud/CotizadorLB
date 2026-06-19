@@ -3463,7 +3463,7 @@ class App(tk.Tk):
             f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
         sep()
 
-        row("Area aluminio", f"{r['area_al_cm2']:.0f} cm2")
+        row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
         row("Laminas Spec (+40% merma)",
             f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
         row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
