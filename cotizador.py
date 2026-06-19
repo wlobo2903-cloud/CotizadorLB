@@ -1051,6 +1051,8 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "n_half": n_half,
         "piece_sizes": auto_piece_sizes,   # pre-populated from nesting; persists between NestingWindow opens
         "placements": placements,
+        "letter_data": letter_data,
+        "nest_scale":  scale,
         "n_acrilico": n_acrilico,
         "area_al_cm2": area_al_cm2,
         "n_aluminio": n_aluminio,
@@ -1963,7 +1965,7 @@ class NestingWindow(tk.Toplevel):
 
     def __init__(self, parent, n_pieces, placements, n_acrilico,
                  on_change=None, piece_sizes=None, piece_vinil=None,
-                 vinil_prices=None):
+                 vinil_prices=None, letter_data=None, nest_scale=1.0):
         super().__init__(parent)
         self.title("Nesting de plantillas")
         self.configure(bg="#f5f5f5")
@@ -1986,6 +1988,8 @@ class NestingWindow(tk.Toplevel):
         self._angle_var    = None
         self.piece_options = {}   # pi → {"vinil": BooleanVar, "transfer": BooleanVar}
         self._cb_wins      = []   # canvas window IDs for checkboxes
+        self._letter_data  = letter_data or []
+        self._nest_scale   = nest_scale
 
         self._build_ui()
         self._render()
@@ -2215,6 +2219,11 @@ class NestingWindow(tk.Toplevel):
                       bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
                       font=("Segoe UI", 8), cursor="hand2", pady=2,
                       command=lambda p=pi: self._cycle_piece(p)
+                      ).pack(fill="x", pady=(0, 2))
+            tk.Button(cb_frame, text="↺ reacomodar",
+                      bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
+                      font=("Segoe UI", 8), cursor="hand2", pady=2,
+                      command=lambda p=pi: self._relayout_piece(p)
                       ).pack(fill="x", pady=(0, 6))
             tk.Checkbutton(cb_frame, text="Vinil",
                            variable=opts["vinil"],
@@ -2504,6 +2513,47 @@ class NestingWindow(tk.Toplevel):
                       bg="#111111", fg="#ffffff", parent_bg=win.cget("bg"),
                       font=("Segoe UI", 10, "bold"), padx=16, pady=8,
                       command=do_export).pack(pady=(12, 18), padx=24)
+
+    def _relayout_piece(self, pi):
+        """Re-run nesting for all letters in a given piece using current piece dimensions."""
+        if not self._letter_data:
+            return
+        scale      = self._nest_scale
+        _, _, pw_cm, ph_cm = self._piece_dims(pi)
+        # Collect letter indices that live in this piece
+        in_piece   = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
+        if not in_piece:
+            return
+        # Build local letter_data for these placements (match by name)
+        name_map   = {ld["name"]: ld for ld in self._letter_data}
+        local_data = []
+        for idx in in_piece:
+            name = self.placements[idx].get("name", "")
+            if name in name_map:
+                local_data.append(name_map[name])
+        if not local_data:
+            return
+        # Simple row-pack re-layout within piece bounds
+        margin = PIECE_MARGIN
+        gx, gy = margin, margin
+        row_h  = 0.0
+        for ld in local_data:
+            w_cm = ld["bbox_size_px"][0] * scale
+            h_cm = ld["bbox_size_px"][1] * scale
+            if gx + w_cm + margin > pw_cm and gx > margin:
+                gx  = margin
+                gy += row_h + margin
+                row_h = 0.0
+            # Update matching placement
+            for idx in in_piece:
+                if self.placements[idx].get("name", "") == ld["name"]:
+                    self.placements[idx]["x"] = gx
+                    self.placements[idx]["y"] = gy
+                    break
+            gx    += w_cm + margin
+            row_h  = max(row_h, h_cm)
+        self._render()
+        self._notify()
 
     def _cycle_piece(self, pi):
         cur = self.piece_sizes.get(pi, "full")
@@ -3712,7 +3762,9 @@ class App(tk.Tk):
         def _on_nesting_open():
             return NestingWindow(self, r["n_pieces"], placements, r["n_acrilico"],
                                  on_change=on_nesting_change,
-                                 piece_sizes=r["piece_sizes"])
+                                 piece_sizes=r["piece_sizes"],
+                                 letter_data=r.get("letter_data", []),
+                                 nest_scale=r.get("nest_scale", 1.0))
 
         def _export_pdf():
             ps   = r.get("piece_sizes", {})
