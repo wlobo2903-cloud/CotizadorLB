@@ -2574,7 +2574,7 @@ class NestingWindow(tk.Toplevel):
             return
 
         _, _, pw_cm, ph_cm = self._piece_dims(pi)
-        n_new, new_pls = _nest_into_dimensions(local_data, self._nest_scale, pw_cm, ph_cm)
+        n_new, new_pls = _nest_into_dimensions(local_data, self._nest_scale, pw_cm, ph_cm)[:2]
 
         # Map new piece indices (0, 1, 2…) onto real piece indices (pi, pi+1, …)
         # creating new pieces if needed
