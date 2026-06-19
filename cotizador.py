@@ -2036,6 +2036,10 @@ class NestingWindow(tk.Toplevel):
                                       font=("Segoe UI", 9), padx=10, pady=5,
                                       command=self._del_last_piece)
         self.del_btn.pack(side="right", padx=(4, 0))
+        RoundedButton(top, text="⇄ Cambiar tamaño pieza",
+                      bg=NW_BG2, fg="#8a5cd0", parent_bg=NW_BG,
+                      font=("Segoe UI", 9), padx=10, pady=5,
+                      command=self._cycle_selected_piece).pack(side="right", padx=2)
         RoundedButton(top, text="+ 240x120", bg=NW_BG2, fg="#27ae60",
                       parent_bg=NW_BG, font=("Segoe UI", 9), padx=8, pady=5,
                       command=lambda: self._add_piece("xl")).pack(side="right", padx=2)
@@ -2153,13 +2157,9 @@ class NestingWindow(tk.Toplevel):
             self.cv.create_rectangle(ox, oy, ox+pw, oy+ph,
                 fill="#f8f8f8" if empty else "#ffffff",
                 outline="#cccccc", width=2)
-            toggle_tag = f"toggle_{pi}"
             self.cv.create_text(ox+6, oy+6, anchor="nw",
-                text=f"P{pi+1} ({size_lbl})  [click para cambiar]",
-                fill="#aaaaaa", font=("Segoe UI", 8), tags=toggle_tag)
-            # invisible hit area for the toggle
-            self.cv.create_rectangle(ox, oy, ox+pw, oy+18,
-                fill="", outline="", tags=(toggle_tag, "piece_toggle"))
+                text=f"P{pi+1} ({size_lbl})",
+                fill="#aaaaaa", font=("Segoe UI", 8))
             m = PIECE_MARGIN * S
             self.cv.create_rectangle(ox+m, oy+m, ox+pw-m, oy+ph-m,
                 outline="#dddddd", width=1, dash=(3,3))
@@ -2314,28 +2314,6 @@ class NestingWindow(tk.Toplevel):
     def _on_click(self, event):
         x = self.cv.canvasx(event.x)
         y = self.cv.canvasy(event.y)
-
-        # Check piece-size toggle first
-        for item in self.cv.find_overlapping(x-2, y-2, x+2, y+2):
-            for tag in self.cv.gettags(item):
-                if tag.startswith("toggle_"):
-                    pi  = int(tag[7:])
-                    cur = self.piece_sizes.get(pi, "full")
-                    # Ciclo: full → xl → half → full
-                    cycle = {"full": "xl", "xl": "half", "half": "full"}
-                    nxt   = cycle.get(cur, "full")
-                    self.piece_sizes[pi] = nxt
-                    # Clamp letras que queden fuera del nuevo tamaño
-                    _, _, pw_cm, ph_cm = self._piece_dims(pi)
-                    for pl in self.placements:
-                        if pl["piece"] == pi:
-                            pl["x"] = max(PIECE_MARGIN,
-                                          min(pl["x"], pw_cm - PIECE_MARGIN - pl["actual_w"]))
-                            pl["y"] = max(PIECE_MARGIN,
-                                          min(pl["y"], ph_cm - PIECE_MARGIN - pl["actual_h"]))
-                    self._render()
-                    self._notify()
-                    return
 
         found = None
         for item in reversed(self.cv.find_overlapping(x-6, y-6, x+6, y+6)):
@@ -2513,6 +2491,25 @@ class NestingWindow(tk.Toplevel):
                       bg="#111111", fg="#ffffff", parent_bg=win.cget("bg"),
                       font=("Segoe UI", 10, "bold"), padx=16, pady=8,
                       command=do_export).pack(pady=(12, 18), padx=24)
+
+    def _cycle_selected_piece(self):
+        """Cicla el tamaño de la pieza que contiene la letra seleccionada."""
+        if self.selected is None or self.selected >= len(self.placements):
+            from tkinter import messagebox
+            messagebox.showinfo("Sin selección",
+                "Selecciona una letra en el nesting primero.")
+            return
+        pi  = self.placements[self.selected]["piece"]
+        cur = self.piece_sizes.get(pi, "full")
+        nxt = {"full": "xl", "xl": "half", "half": "full"}.get(cur, "full")
+        self.piece_sizes[pi] = nxt
+        _, _, pw_cm, ph_cm = self._piece_dims(pi)
+        for pl in self.placements:
+            if pl["piece"] == pi:
+                pl["x"] = max(PIECE_MARGIN, min(pl["x"], pw_cm - PIECE_MARGIN - pl["actual_w"]))
+                pl["y"] = max(PIECE_MARGIN, min(pl["y"], ph_cm - PIECE_MARGIN - pl["actual_h"]))
+        self._render()
+        self._notify()
 
     def _add_piece(self, size="full"):
         self.piece_sizes[self.n_pieces] = size
