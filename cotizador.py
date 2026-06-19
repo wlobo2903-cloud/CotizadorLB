@@ -3245,6 +3245,7 @@ class App(tk.Tk):
         self.proyecto_var  = tk.StringVar()
         self.tipo_persona_var = tk.StringVar(value="Persona Física")
         self.desc_text     = None   # tk.Text widget, assigned in _build
+        self._last_r       = None   # last calculate() result, for default descriptions
 
         self._build()
 
@@ -3460,6 +3461,20 @@ class App(tk.Tk):
                         bg="#e0e0e0", fg="#555555",
                         relief="flat", font=("Segoe UI", 9))
                     btn_data["bar"].config(bg="#e0e0e0")
+            # Pre-fill default description for Aluminio tab if description is empty
+            if idx == 1 and self.desc_text and self._last_r:
+                current = self.desc_text.get("1.0", "end-1c").strip()
+                if not current:
+                    w_cm = self._last_r.get("sign_w_cm", 0)
+                    h_cm = self._last_r.get("sign_h_cm", 0)
+                    dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+                    default_desc = (
+                        "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                        "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                        f"con charolas de PVC. luz directa a base de leds blanco 4000K. medidas: {dims}"
+                    )
+                    self.desc_text.delete("1.0", "end")
+                    self.desc_text.insert("1.0", default_desc)
 
         for i, t in enumerate(TABS):
             col = tk.Frame(tab_bar, bg=BG2)
@@ -3568,6 +3583,7 @@ class App(tk.Tk):
                 messagebox.showerror("Error", "No se pudo calcular. Verifica el archivo SVG.")
                 return
             result["tipo_persona"] = self.tipo_persona_var.get()
+            self._last_r = result
             for rf in self.res_frames:
                 self._show_results(result, rf)
 
