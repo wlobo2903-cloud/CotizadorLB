@@ -705,50 +705,6 @@ def _nest_fallback_simple(letter_data, scale):
     return pieces, placements, {}
 
 
-def _nest_into_dimensions(letter_data, scale, pw_cm, ph_cm):
-    """Shelf-packer like _nest_fallback_simple but using arbitrary piece dimensions.
-    Returns list of placements with piece indices starting at 0."""
-    EFF_W = pw_cm - 2 * PIECE_MARGIN
-    EFF_H = ph_cm - 2 * PIECE_MARGIN
-    GAP   = LETTER_GAP
-    pieces, shelves, placements = 1, [], []
-    for letter in sorted(letter_data, key=lambda l: l["bbox_size_px"][1]*scale, reverse=True):
-        w = letter["bbox_size_px"][0] * scale
-        h = letter["bbox_size_px"][1] * scale
-        placed = False
-        used_h = sum(s["height"] for s in shelves)
-        for shelf in shelves:
-            if shelf["remaining_x"] >= w + GAP and shelf["height"] >= h + GAP:
-                placements.append({"piece": pieces-1, "x": shelf["used_x"]+GAP/2,
-                    "y": shelf["y"]+GAP/2, "actual_w": w, "actual_h": h,
-                    "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
-                    "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
-                    "scale": scale})
-                shelf["used_x"] += w+GAP; shelf["remaining_x"] -= w+GAP
-                placed = True; break
-        if not placed and used_h + h + GAP <= EFF_H:
-            shelves.append({"height": h+GAP, "remaining_x": EFF_W-w-GAP,
-                "used_x": PIECE_MARGIN+w+GAP, "y": PIECE_MARGIN+used_h})
-            placements.append({"piece": pieces-1, "x": PIECE_MARGIN+GAP/2,
-                "y": PIECE_MARGIN+used_h+GAP/2, "actual_w": w, "actual_h": h,
-                "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
-                "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
-                "scale": scale})
-            placed = True
-        if not placed:
-            pieces += 1; shelves = []
-            EFF_W = pw_cm - 2 * PIECE_MARGIN   # reset for new piece (same size)
-            EFF_H = ph_cm - 2 * PIECE_MARGIN
-            shelves.append({"height": h+GAP, "remaining_x": EFF_W-w-GAP,
-                "used_x": PIECE_MARGIN+w+GAP, "y": PIECE_MARGIN})
-            placements.append({"piece": pieces-1, "x": PIECE_MARGIN+GAP/2,
-                "y": PIECE_MARGIN+GAP/2, "actual_w": w, "actual_h": h,
-                "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
-                "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
-                "scale": scale})
-    return pieces, placements
-
-
 def compute_letter_min_bbox(shapes):
     """
     Usa shapely para encontrar el rectángulo mínimo que envuelve la letra.
@@ -1095,8 +1051,6 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "n_half": n_half,
         "piece_sizes": auto_piece_sizes,   # pre-populated from nesting; persists between NestingWindow opens
         "placements": placements,
-        "letter_data": letter_data,
-        "nest_scale":  scale,
         "n_acrilico": n_acrilico,
         "area_al_cm2": area_al_cm2,
         "n_aluminio": n_aluminio,
@@ -2009,7 +1963,7 @@ class NestingWindow(tk.Toplevel):
 
     def __init__(self, parent, n_pieces, placements, n_acrilico,
                  on_change=None, piece_sizes=None, piece_vinil=None,
-                 vinil_prices=None, letter_data=None, nest_scale=1.0):
+                 vinil_prices=None):
         super().__init__(parent)
         self.title("Nesting de plantillas")
         self.configure(bg="#f5f5f5")
@@ -2032,8 +1986,6 @@ class NestingWindow(tk.Toplevel):
         self._angle_var    = None
         self.piece_options = {}   # pi → {"vinil": BooleanVar, "transfer": BooleanVar}
         self._cb_wins      = []   # canvas window IDs for checkboxes
-        self._letter_data  = letter_data or []
-        self._nest_scale   = nest_scale
 
         self._build_ui()
         self._render()
@@ -2263,11 +2215,6 @@ class NestingWindow(tk.Toplevel):
                       bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
                       font=("Segoe UI", 8), cursor="hand2", pady=2,
                       command=lambda p=pi: self._cycle_piece(p)
-                      ).pack(fill="x", pady=(0, 2))
-            tk.Button(cb_frame, text="↺ reacomodar",
-                      bg="#e8e8e8", fg="#555555", relief="flat", bd=1,
-                      font=("Segoe UI", 8), cursor="hand2", pady=2,
-                      command=lambda p=pi: self._relayout_piece(p)
                       ).pack(fill="x", pady=(0, 6))
             tk.Checkbutton(cb_frame, text="Vinil",
                            variable=opts["vinil"],
@@ -2557,55 +2504,6 @@ class NestingWindow(tk.Toplevel):
                       bg="#111111", fg="#ffffff", parent_bg=win.cget("bg"),
                       font=("Segoe UI", 10, "bold"), padx=16, pady=8,
                       command=do_export).pack(pady=(12, 18), padx=24)
-
-    def _relayout_piece(self, pi):
-        """Re-nest letters of a piece using the same shelf algorithm as the initial calculation."""
-        print(f"[relayout] pi={pi} letter_data={len(self._letter_data)} placements={len(self.placements)}")
-        if not self._letter_data:
-            print("[relayout] STOP: no letter_data")
-            return
-        in_piece = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
-        print(f"[relayout] in_piece={in_piece}")
-        if not in_piece:
-            print("[relayout] STOP: no placements in piece")
-            return
-
-        # Collect letter_data entries for letters in this piece (match by name)
-        name_map    = {ld["name"]: ld for ld in self._letter_data}
-        print(f"[relayout] name_map keys={list(name_map.keys())[:5]}")
-        print(f"[relayout] placement names={[self.placements[i].get('name') for i in in_piece]}")
-        local_data  = [name_map[self.placements[i]["name"]]
-                       for i in in_piece if self.placements[i]["name"] in name_map]
-        print(f"[relayout] local_data count={len(local_data)}")
-        if not local_data:
-            print("[relayout] STOP: name mismatch")
-            return
-
-        _, _, pw_cm, ph_cm = self._piece_dims(pi)
-        n_new, new_pls = _nest_into_dimensions(local_data, self._nest_scale, pw_cm, ph_cm)[:2]
-
-        # Map new piece indices (0, 1, 2…) onto real piece indices (pi, pi+1, …)
-        # creating new pieces if needed
-        piece_map = {0: pi}
-        for k in range(1, n_new):
-            real_pi = pi + k
-            if real_pi >= self.n_pieces:
-                self.piece_sizes[self.n_pieces] = self.piece_sizes.get(pi, "full")
-                self.n_pieces += 1
-            piece_map[k] = real_pi
-
-        # Update the existing placements in-place using the new layout
-        old_indices = list(in_piece)
-        for new_pl in new_pls:
-            if old_indices:
-                idx = old_indices.pop(0)
-                self.placements[idx]["x"]     = new_pl["x"]
-                self.placements[idx]["y"]     = new_pl["y"]
-                self.placements[idx]["angle"] = new_pl.get("angle", 0)
-                self.placements[idx]["piece"] = piece_map[new_pl["piece"]]
-
-        self._render()
-        self._notify()
 
     def _cycle_piece(self, pi):
         cur = self.piece_sizes.get(pi, "full")
@@ -3794,9 +3692,7 @@ class App(tk.Tk):
                  on_change=on_nesting_change,
                  piece_sizes=r["piece_sizes"],
                  piece_vinil=r.get("piece_vinil", {}),
-                 vinil_prices=r.get("vinil_prices", {}),
-                 letter_data=r.get("letter_data", []),
-                 nest_scale=r.get("nest_scale", 1.0)),
+                 vinil_prices=r.get("vinil_prices", {})),
              r=0, c=0)
         _btn(bottom, "Ver aluminio", "#e8e8e8", "#1a1a1a",
              lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
@@ -3814,13 +3710,9 @@ class App(tk.Tk):
 
         # r["piece_sizes"] is the shared dict — always use it for PDF too
         def _on_nesting_open():
-            ld = r.get("letter_data", [])
-            print(f"[nesting_open] letter_data len={len(ld)} nest_scale={r.get('nest_scale')}")
             return NestingWindow(self, r["n_pieces"], placements, r["n_acrilico"],
                                  on_change=on_nesting_change,
-                                 piece_sizes=r["piece_sizes"],
-                                 letter_data=ld,
-                                 nest_scale=r.get("nest_scale", 1.0))
+                                 piece_sizes=r["piece_sizes"])
 
         def _export_pdf():
             ps   = r.get("piece_sizes", {})
