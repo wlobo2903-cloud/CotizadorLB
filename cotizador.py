@@ -705,6 +705,50 @@ def _nest_fallback_simple(letter_data, scale):
     return pieces, placements, {}
 
 
+def _nest_into_dimensions(letter_data, scale, pw_cm, ph_cm):
+    """Shelf-packer like _nest_fallback_simple but using arbitrary piece dimensions.
+    Returns list of placements with piece indices starting at 0."""
+    EFF_W = pw_cm - 2 * PIECE_MARGIN
+    EFF_H = ph_cm - 2 * PIECE_MARGIN
+    GAP   = LETTER_GAP
+    pieces, shelves, placements = 1, [], []
+    for letter in sorted(letter_data, key=lambda l: l["bbox_size_px"][1]*scale, reverse=True):
+        w = letter["bbox_size_px"][0] * scale
+        h = letter["bbox_size_px"][1] * scale
+        placed = False
+        used_h = sum(s["height"] for s in shelves)
+        for shelf in shelves:
+            if shelf["remaining_x"] >= w + GAP and shelf["height"] >= h + GAP:
+                placements.append({"piece": pieces-1, "x": shelf["used_x"]+GAP/2,
+                    "y": shelf["y"]+GAP/2, "actual_w": w, "actual_h": h,
+                    "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
+                    "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
+                    "scale": scale})
+                shelf["used_x"] += w+GAP; shelf["remaining_x"] -= w+GAP
+                placed = True; break
+        if not placed and used_h + h + GAP <= EFF_H:
+            shelves.append({"height": h+GAP, "remaining_x": EFF_W-w-GAP,
+                "used_x": PIECE_MARGIN+w+GAP, "y": PIECE_MARGIN+used_h})
+            placements.append({"piece": pieces-1, "x": PIECE_MARGIN+GAP/2,
+                "y": PIECE_MARGIN+used_h+GAP/2, "actual_w": w, "actual_h": h,
+                "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
+                "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
+                "scale": scale})
+            placed = True
+        if not placed:
+            pieces += 1; shelves = []
+            EFF_W = pw_cm - 2 * PIECE_MARGIN   # reset for new piece (same size)
+            EFF_H = ph_cm - 2 * PIECE_MARGIN
+            shelves.append({"height": h+GAP, "remaining_x": EFF_W-w-GAP,
+                "used_x": PIECE_MARGIN+w+GAP, "y": PIECE_MARGIN})
+            placements.append({"piece": pieces-1, "x": PIECE_MARGIN+GAP/2,
+                "y": PIECE_MARGIN+GAP/2, "actual_w": w, "actual_h": h,
+                "angle": 0, "name": letter["name"], "shapes": letter["shapes"],
+                "bbox_origin": letter["bbox_origin"], "bbox_size_px": letter["bbox_size_px"],
+                "scale": scale})
+    return pieces, placements
+
+
 def compute_letter_min_bbox(shapes):
     """
     Usa shapely para encontrar el rectángulo mínimo que envuelve la letra.
@@ -2515,50 +2559,42 @@ class NestingWindow(tk.Toplevel):
                       command=do_export).pack(pady=(12, 18), padx=24)
 
     def _relayout_piece(self, pi):
-        """Re-pack letters of a piece in rows. Overflow letters spill to next pieces."""
-        GAP = LETTER_GAP
-
-        def _pack_into(indices, piece_idx):
-            """Pack placements[indices] into piece_idx. Returns list of indices that didn't fit."""
-            _, _, pw_cm, ph_cm = self._piece_dims(piece_idx)
-            usable_w = pw_cm - 2 * PIECE_MARGIN
-            usable_h = ph_cm - 2 * PIECE_MARGIN
-            gx, gy, row_h = 0.0, 0.0, 0.0
-            overflow = []
-            for idx in indices:
-                pl   = self.placements[idx]
-                w, h = pl["actual_w"], pl["actual_h"]
-                # wrap row
-                if gx + w > usable_w and gx > 0:
-                    gx     = 0.0
-                    gy    += row_h + GAP
-                    row_h  = 0.0
-                # doesn't fit vertically → overflow
-                if gy + h > usable_h:
-                    overflow.append(idx)
-                    continue
-                pl["x"]  = PIECE_MARGIN + gx
-                pl["y"]  = PIECE_MARGIN + gy
-                pl["piece"] = piece_idx
-                gx      += w + GAP
-                row_h    = max(row_h, h)
-            return overflow
-
+        """Re-nest letters of a piece using the same shelf algorithm as the initial calculation."""
+        if not self._letter_data:
+            return
         in_piece = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
         if not in_piece:
             return
 
-        overflow = _pack_into(in_piece, pi)
+        # Collect letter_data entries for letters in this piece (match by name)
+        name_map    = {ld["name"]: ld for ld in self._letter_data}
+        local_data  = [name_map[self.placements[i]["name"]]
+                       for i in in_piece if self.placements[i]["name"] in name_map]
+        if not local_data:
+            return
 
-        # Spill overflow to subsequent pieces, creating new ones if needed
-        cur_pi = pi + 1
-        while overflow:
-            if cur_pi >= self.n_pieces:
-                # add a new full piece
+        _, _, pw_cm, ph_cm = self._piece_dims(pi)
+        n_new, new_pls = _nest_into_dimensions(local_data, self._nest_scale, pw_cm, ph_cm)
+
+        # Map new piece indices (0, 1, 2…) onto real piece indices (pi, pi+1, …)
+        # creating new pieces if needed
+        piece_map = {0: pi}
+        for k in range(1, n_new):
+            real_pi = pi + k
+            if real_pi >= self.n_pieces:
                 self.piece_sizes[self.n_pieces] = self.piece_sizes.get(pi, "full")
                 self.n_pieces += 1
-            overflow = _pack_into(overflow, cur_pi)
-            cur_pi += 1
+            piece_map[k] = real_pi
+
+        # Update the existing placements in-place using the new layout
+        old_indices = list(in_piece)
+        for new_pl in new_pls:
+            if old_indices:
+                idx = old_indices.pop(0)
+                self.placements[idx]["x"]     = new_pl["x"]
+                self.placements[idx]["y"]     = new_pl["y"]
+                self.placements[idx]["angle"] = new_pl.get("angle", 0)
+                self.placements[idx]["piece"] = piece_map[new_pl["piece"]]
 
         self._render()
         self._notify()
