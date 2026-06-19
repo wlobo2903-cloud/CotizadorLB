@@ -926,7 +926,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_acrilico = billing / 4
 
     area_al_cm2 = total_perim_cm * 5.0
-    n_aluminio = (area_al_cm2 / (240 * 120)) * 1.20   # exacto + 20% merma
+    n_aluminio = (area_al_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
 
     perim_m = total_perim_cm / 100.0
     n_rollos = math.ceil(perim_m / 5.0)
@@ -947,7 +947,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
 
     # PVC 2mm — tiras de 2cm, igual que aluminio
     area_pvc2_cm2 = total_perim_cm * 2.0
-    n_pvc2 = (area_pvc2_cm2 / (240 * 120)) * 1.20   # exacto + 20% merma
+    n_pvc2 = (area_pvc2_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
     c_pvc2 = n_pvc2 * p.get("pvc2_lamina", 0)
 
     c_mano = n_letters * p["mano_obra_letra"]
@@ -1313,7 +1313,7 @@ def _pil_nesting_image(placements, n_pieces, piece_sizes, scale=6):
     return img
 
 
-def _pil_aluminum_image(letter_perims_cm, letter_names, strip_w, scale=3):
+def _pil_aluminum_image(letter_perims_cm, letter_names, strip_w, scale=3, merma=0.40):
     """Render aluminum/PVC-2mm strip layout to a PIL Image."""
     from PIL import Image, ImageDraw
     SHEET_W, SHEET_H = 240.0, 120.0
@@ -1333,14 +1333,14 @@ def _pil_aluminum_image(letter_perims_cm, letter_names, strip_w, scale=3):
         if name not in letter_colors:
             letter_colors[name] = COLORS_PIL[color_idx % len(COLORS_PIL)]
             color_idx += 1
-        remaining = perim + perim * 0.20  # include merma
+        remaining = perim + perim * merma  # include merma
         while remaining > 0.01:
             if col_y >= SHEET_H - 0.1:
                 col_x += strip_w; col_y = 0.0
             if col_x + strip_w > SHEET_W + 0.1:
                 sheets.append([]); col_x = col_y = 0.0
             seg = min(remaining, SHEET_H - col_y)
-            is_merma = perim > 0 and remaining <= perim * 0.20
+            is_merma = perim > 0 and remaining <= perim * merma
             sheets[-1].append((col_x, col_y, strip_w, seg, name, is_merma))
             col_y += seg; remaining -= seg
 
@@ -1549,10 +1549,10 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
             items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
                 f"{r['n_pvc6']:.3f}", cfg_p.get("pvc6_lamina",0), r["c_pvc6"]))
         if r.get("c_aluminio", 0):
-            items_rows.append(_row("Aluminio calibre 22 (+20% merma)",
+            items_rows.append(_row("Aluminio calibre 22 (+40% merma)",
                 f"{r['n_aluminio']:.3f}", cfg_p.get("aluminio_lamina",0), r["c_aluminio"]))
         if r.get("c_pvc2", 0):
-            items_rows.append(_row("PVC 2mm (+20% merma)",
+            items_rows.append(_row("PVC 2mm (+40% merma)",
                 f"{r['n_pvc2']:.3f}", cfg_p.get("pvc2_lamina",0), r["c_pvc2"]))
         if r.get("c_leds", 0):
             items_rows.append(_row("Tira LED 5m (rollo)",
@@ -2534,12 +2534,13 @@ class AluminumWindow(tk.Toplevel):
     GAP     = 0     # gap between sheets (flush)
 
     def __init__(self, parent, letter_perims_cm, letter_names, n_sheets,
-                 strip_w=5.0, title="Aluminio"):
+                 strip_w=5.0, title="Aluminio", merma=0.40):
         super().__init__(parent)
         self.title(f"Distribucion de {title}")
         self.configure(bg="#f5f5f5")
         self.resizable(True, True)
         self.STRIP_W = strip_w
+        self.MERMA   = merma
         self._build(letter_perims_cm, letter_names, n_sheets)
 
     def _build(self, perims, names, n_sheets_calc):
@@ -2588,15 +2589,16 @@ class AluminumWindow(tk.Toplevel):
                 col_y    += seg_len
                 remaining -= seg_len
 
-        # ── merma (20%) — tiras adicionales en gris ────────────────────────
-        merma_remaining = sum(perims) * 0.20
+        # ── merma — tiras adicionales en gris ─────────────────────────────
+        merma_pct = int(self.MERMA * 100)
+        merma_remaining = sum(perims) * self.MERMA
         while merma_remaining > 0.01:
             if col_y >= self.SHEET_H - 0.1:
                 start_new_column()
             if col_x + self.STRIP_W > self.SHEET_W + 0.1:
                 start_new_sheet()
             seg_len = min(merma_remaining, self.SHEET_H - col_y)
-            sheets[-1].append((col_x, col_y, self.STRIP_W, seg_len, "Merma 20%", True))
+            sheets[-1].append((col_x, col_y, self.STRIP_W, seg_len, f"Merma {merma_pct}%", True))
             col_y          += seg_len
             merma_remaining -= seg_len
 
@@ -2610,7 +2612,7 @@ class AluminumWindow(tk.Toplevel):
         header = tk.Label(
             self, bg="#f5f5f5", fg="#1a1a1a", font=("Segoe UI", 11, "bold"),
             text=f"{n} hojas 240x120 cm  |  tiras {self.STRIP_W} cm x max 120 cm  "
-                 f"|  gris = merma 20%")
+                 f"|  gris = merma {merma_pct}%")
         header.pack(padx=10, pady=(10, 0), anchor="w")
 
         frame = tk.Frame(self, bg="#f5f5f5")
@@ -3462,10 +3464,10 @@ class App(tk.Tk):
         sep()
 
         row("Area aluminio", f"{r['area_al_cm2']:.0f} cm2")
-        row("Laminas aluminio (+20% merma)",
+        row("Laminas aluminio (+40% merma)",
             f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
         row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
-        row("Laminas PVC 2mm (+20% merma)",
+        row("Laminas PVC 2mm (+40% merma)",
             f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
         sep()
 
