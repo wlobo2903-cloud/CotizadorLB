@@ -2515,28 +2515,51 @@ class NestingWindow(tk.Toplevel):
                       command=do_export).pack(pady=(12, 18), padx=24)
 
     def _relayout_piece(self, pi):
-        """Re-pack all letters of a piece in rows using their actual_w/actual_h (cm)."""
-        _, _, pw_cm, ph_cm = self._piece_dims(pi)
+        """Re-pack letters of a piece in rows. Overflow letters spill to next pieces."""
+        GAP = LETTER_GAP
+
+        def _pack_into(indices, piece_idx):
+            """Pack placements[indices] into piece_idx. Returns list of indices that didn't fit."""
+            _, _, pw_cm, ph_cm = self._piece_dims(piece_idx)
+            usable_w = pw_cm - 2 * PIECE_MARGIN
+            usable_h = ph_cm - 2 * PIECE_MARGIN
+            gx, gy, row_h = 0.0, 0.0, 0.0
+            overflow = []
+            for idx in indices:
+                pl   = self.placements[idx]
+                w, h = pl["actual_w"], pl["actual_h"]
+                # wrap row
+                if gx + w > usable_w and gx > 0:
+                    gx     = 0.0
+                    gy    += row_h + GAP
+                    row_h  = 0.0
+                # doesn't fit vertically → overflow
+                if gy + h > usable_h:
+                    overflow.append(idx)
+                    continue
+                pl["x"]  = PIECE_MARGIN + gx
+                pl["y"]  = PIECE_MARGIN + gy
+                pl["piece"] = piece_idx
+                gx      += w + GAP
+                row_h    = max(row_h, h)
+            return overflow
+
         in_piece = [i for i, p in enumerate(self.placements) if p["piece"] == pi]
         if not in_piece:
             return
-        GAP    = 0.5   # cm gap between letters
-        margin = PIECE_MARGIN
-        gx, gy = margin, margin
-        row_h  = 0.0
-        for idx in in_piece:
-            pl    = self.placements[idx]
-            w_cm  = pl["actual_w"]
-            h_cm  = pl["actual_h"]
-            # wrap to next row if needed
-            if gx + w_cm > pw_cm - margin and gx > margin:
-                gx     = margin
-                gy    += row_h + GAP
-                row_h  = 0.0
-            pl["x"]  = gx
-            pl["y"]  = gy
-            gx       += w_cm + GAP
-            row_h     = max(row_h, h_cm)
+
+        overflow = _pack_into(in_piece, pi)
+
+        # Spill overflow to subsequent pieces, creating new ones if needed
+        cur_pi = pi + 1
+        while overflow:
+            if cur_pi >= self.n_pieces:
+                # add a new full piece
+                self.piece_sizes[self.n_pieces] = self.piece_sizes.get(pi, "full")
+                self.n_pieces += 1
+            overflow = _pack_into(overflow, cur_pi)
+            cur_pi += 1
+
         self._render()
         self._notify()
 
