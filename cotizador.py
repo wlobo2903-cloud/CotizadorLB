@@ -3421,26 +3421,24 @@ class App(tk.Tk):
         tab_bar = tk.Frame(outer, bg=BG2)
         tab_bar.pack(fill="x")
 
-        content_area = tk.Frame(outer, bg=BG2)
-        content_area.pack(fill="both", expand=True)
-
         self.res_frames = []
         self._tab_btns  = []
 
+        # Crear todos los frames y apilarlos con pack; solo el activo es visible
         for t in TABS:
-            f = tk.Frame(content_area, bg=t["bg"], padx=24, pady=24)
+            f = tk.Frame(outer, bg=t["bg"], padx=24, pady=24)
             self.res_frames.append(f)
 
         def _switch_tab(idx):
             for i, (f, btn_data) in enumerate(zip(self.res_frames, self._tab_btns)):
                 if i == idx:
-                    f.place(relx=0, rely=0, relwidth=1, relheight=1)
+                    f.pack(fill="both", expand=True)
                     btn_data["btn"].config(
                         bg=TABS[i]["color"], fg="#ffffff",
                         relief="flat", font=("Segoe UI", 9, "bold"))
                     btn_data["bar"].config(bg=TABS[i]["color"])
                 else:
-                    f.place_forget()
+                    f.pack_forget()
                     btn_data["btn"].config(
                         bg="#e0e0e0", fg="#555555",
                         relief="flat", font=("Segoe UI", 9))
@@ -3460,7 +3458,6 @@ class App(tk.Tk):
             bar.pack(fill="x")
             self._tab_btns.append({"btn": btn, "bar": bar})
 
-        content_area.pack_propagate(False)
         _switch_tab(0)
 
         # Alias para compatibilidad con código existente (tab activo)
