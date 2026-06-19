@@ -2070,6 +2070,10 @@ class NestingWindow(tk.Toplevel):
         self.cv.bind("<Button-1>",        self._on_click)
         self.cv.bind("<B1-Motion>",       self._on_drag)
         self.cv.bind("<ButtonRelease-1>", self._on_release)
+        self.cv.bind("<MouseWheel>",
+            lambda e: self.cv.yview_scroll(int(-1*(e.delta/120)), "units"))
+        self.cv.bind("<Shift-MouseWheel>",
+            lambda e: self.cv.xview_scroll(int(-1*(e.delta/120)), "units"))
         self.bind("<r>", lambda e: self._rotate_by(15))
         self.bind("<R>", lambda e: self._rotate_by(-15))
         self.bind("<Left>",  lambda e: self._shift_piece(-1))
