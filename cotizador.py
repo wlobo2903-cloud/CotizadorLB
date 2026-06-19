@@ -3205,6 +3205,7 @@ class App(tk.Tk):
         self.empresa_c_var = tk.StringVar()
         self.direccion_var = tk.StringVar()
         self.proyecto_var  = tk.StringVar()
+        self.tipo_persona_var = tk.StringVar(value="Persona Física")
         self.desc_text     = None   # tk.Text widget, assigned in _build
 
         self._build()
@@ -3275,6 +3276,18 @@ class App(tk.Tk):
 
         # ── Cliente ───────────────────────────────────────────────────────
         self._section_label(left, "PRESUPUESTO")
+
+        tk.Label(left, text="Tipo de persona", bg=BG, fg=FG2,
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(8, 0))
+        tipo_row = tk.Frame(left, bg=BG)
+        tipo_row.pack(anchor="w", pady=(4, 0))
+        for opcion in ("Persona Física", "Persona Moral"):
+            tk.Radiobutton(tipo_row, text=opcion, variable=self.tipo_persona_var,
+                           value=opcion, bg=BG, fg=FG, selectcolor=BG3,
+                           activebackground=BG, activeforeground=FG,
+                           font=("Segoe UI", 9), cursor="hand2"
+                           ).pack(side="left", padx=(0, 12))
+
         campos = [
             ("Cliente",    self.cliente_var),
             ("Empresa",    self.empresa_c_var),
@@ -3581,6 +3594,7 @@ class App(tk.Tk):
                 r["empresa_cliente"] = self.empresa_c_var.get().strip()
                 r["direccion"]       = self.direccion_var.get().strip()
                 r["proyecto"]        = self.proyecto_var.get().strip()
+                r["tipo_persona"]    = self.tipo_persona_var.get()
                 r["descripcion"]     = self.desc_text.get("1.0", "end-1c").strip() if self.desc_text else ""
                 r["empresa"]         = self.cfg.get("empresa", {})
                 r["folio"]           = folio
