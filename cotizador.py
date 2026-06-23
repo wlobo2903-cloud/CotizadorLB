@@ -3453,8 +3453,8 @@ class App(tk.Tk):
 
         # ── Tabs de tipos de anuncio (colores por tab) ───────────────────
         TABS = [
-            {"name": "Acrílico con acrílico", "color": "#4f86c6", "bg": "#eef4fc"},
             {"name": "Aluminio con acrílico",  "color": "#3aaa6a", "bg": "#edfaf3"},
+            {"name": "Aluminio por aluminio",   "color": "#4f86c6", "bg": "#eef4fc"},
         ]
 
         tab_bar = tk.Frame(outer, bg=BG2)
@@ -3502,9 +3502,9 @@ class App(tk.Tk):
             # Restore description for the new tab
             if self.desc_text:
                 saved = self._desc_per_tab[idx]
-                if not saved and idx == 1:
+                if not saved and idx == 0:
                     saved = _aluminio_default_desc()
-                    self._desc_per_tab[1] = saved
+                    self._desc_per_tab[0] = saved
                 self.desc_text.delete("1.0", "end")
                 self.desc_text.insert("1.0", saved)
             self._active_tab = idx
@@ -3623,7 +3623,7 @@ class App(tk.Tk):
             for rf in self.res_frames:
                 self._show_results(result, rf)
             # If aluminio tab is active, fill description now
-            if self._active_tab == 1 and self.desc_text:
+            if self._active_tab == 0 and self.desc_text:
                 w_cm = result.get("sign_w_cm", 0)
                 h_cm = result.get("sign_h_cm", 0)
                 dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
@@ -3632,10 +3632,10 @@ class App(tk.Tk):
                     "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
                     f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
                 )
-                self._desc_per_tab[1] = default_desc
+                self._desc_per_tab[0] = default_desc
                 self.desc_text.delete("1.0", "end")
                 self.desc_text.insert("1.0", default_desc)
-            elif self._active_tab == 0 and self.desc_text:
+            elif self._active_tab == 1 and self.desc_text:
                 self.desc_text.delete("1.0", "end")
 
         threading.Thread(target=worker, daemon=True).start()
@@ -3662,72 +3662,80 @@ class App(tk.Tk):
         def sep():
             tk.Frame(res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
-        tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
+        desc = self.desc_text.get("1.0", "end-1c").strip() if self.desc_text else ""
+        if desc:
+            tk.Label(res_frame, text=desc, bg=bg, fg=fg2,
+                     font=("Segoe UI", 9), wraplength=520, justify="left",
+                     ).pack(anchor="w", pady=(0, 12))
 
-        row("Letras detectadas", str(r["n_letters"]))
-        row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
-        sep()
+        if not desc:
+            tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
+                     font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
 
-        n_xl   = r.get("n_xl",   0)
-        n_full = r.get("n_full", r["n_pieces"])
-        n_tall = r.get("n_tall", 0)
-        n_half = r.get("n_half", 0)
-        parts  = []
-        if n_xl:   parts.append(f"{n_xl} × 240x120")
-        if n_full: parts.append(f"{n_full} × 120x60")
-        if n_tall: parts.append(f"{n_tall} × 60x120")
-        if n_half: parts.append(f"{n_half} × 60x60")
-        billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
-        n_lam      = billing / 4
-        piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
-        row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
-        row("Laminas Acrílico Z2 240x120",
-            f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
-        row("Laminas PVC 6mm 240x120",
-            f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
-        sep()
-
-        row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
-        row("Laminas Spec (+40% merma)",
-            f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
-        row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
-        row("Laminas PVC 2mm (+40% merma)",
-            f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
-        sep()
-
-        row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
-        sep()
-
-        row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
-        row("Watts totales", f"{r['watts']} W")
-        row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
-        sep()
-
-        row("Instalacion", fmt(r['c_instalacion']))
-        pc = r.get("papel_cfg", {})
-        row("Papel plantilla",
-            f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
-            f"{r['n_papel']} pliegos ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
-            f"{fmt(r['c_papel'])}")
-        sep()
-
-        tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
-        for nombre, precio in r.get("basicos", []):
-            row(f"  {nombre}", fmt(precio))
-        row("Total basicos", fmt(r['c_basicos_total']), color=fg)
-        sep()
-
-        c_vinil = r.get("c_vinil", 0.0)
-        if c_vinil > 0:
-            row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
+        if not desc:
+            row("Letras detectadas", str(r["n_letters"]))
+            row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
             sep()
 
-        c_esp = r.get("c_esparragos", 0.0)
-        if c_esp > 0:
-            row(f"Espárragos ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
+            n_xl   = r.get("n_xl",   0)
+            n_full = r.get("n_full", r["n_pieces"])
+            n_tall = r.get("n_tall", 0)
+            n_half = r.get("n_half", 0)
+            parts  = []
+            if n_xl:   parts.append(f"{n_xl} × 240x120")
+            if n_full: parts.append(f"{n_full} × 120x60")
+            if n_tall: parts.append(f"{n_tall} × 60x120")
+            if n_half: parts.append(f"{n_half} × 60x60")
+            billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
+            n_lam      = billing / 4
+            piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
+            row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
+            row("Laminas Acrílico Z2 240x120",
+                f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
+            row("Laminas PVC 6mm 240x120",
+                f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
             sep()
+
+            row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
+            row("Laminas Spec (+40% merma)",
+                f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
+            row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
+            row("Laminas PVC 2mm (+40% merma)",
+                f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
+            sep()
+
+            row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
+            sep()
+
+            row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
+            row("Watts totales", f"{r['watts']} W")
+            row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
+            sep()
+
+            row("Instalacion", fmt(r['c_instalacion']))
+            pc = r.get("papel_cfg", {})
+            row("Papel plantilla",
+                f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
+                f"{r['n_papel']} pliegos ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
+                f"{fmt(r['c_papel'])}")
+            sep()
+
+            tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
+            for nombre, precio in r.get("basicos", []):
+                row(f"  {nombre}", fmt(precio))
+            row("Total basicos", fmt(r['c_basicos_total']), color=fg)
+            sep()
+
+            c_vinil = r.get("c_vinil", 0.0)
+            if c_vinil > 0:
+                row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
+                sep()
+
+            c_esp = r.get("c_esparragos", 0.0)
+            if c_esp > 0:
+                row(f"Espárragos ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
+                sep()
 
         # Total label
         tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
