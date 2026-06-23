@@ -960,8 +960,9 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_pvc2 = (area_pvc2_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
     c_pvc2 = n_pvc2 * p.get("pvc2_lamina", 0)
 
-    c_fee         = p.get("fee_asociado", 0)
-    c_mano = n_letters * p["mano_obra_letra"] + c_fee
+    c_mano_base   = n_letters * p["mano_obra_letra"]
+    c_fee         = c_mano_base * 0.20
+    c_mano        = c_mano_base + c_fee
     c_leds = n_rollos * p["led_rollo"]
     c_fuente      = fuente["precio"]
     c_instalacion = p.get("instalacion", 0)
