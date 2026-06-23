@@ -3619,24 +3619,22 @@ class App(tk.Tk):
                 return
             result["tipo_persona"] = self.tipo_persona_var.get()
             self._last_r = result
-            self._desc_per_tab = ["", ""]   # reset saved descriptions on new calculation
+            # Always build the aluminio default with fresh dimensions
+            w_cm = result.get("sign_w_cm", 0)
+            h_cm = result.get("sign_h_cm", 0)
+            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+            aluminio_desc = (
+                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
+            )
+            self._desc_per_tab = [aluminio_desc, ""]
             for rf in self.res_frames:
                 self._show_results(result, rf)
-            # If aluminio tab is active, fill description now
-            if self._active_tab == 0 and self.desc_text:
-                w_cm = result.get("sign_w_cm", 0)
-                h_cm = result.get("sign_h_cm", 0)
-                dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-                default_desc = (
-                    "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                    "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                    f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-                )
-                self._desc_per_tab[0] = default_desc
+            # Update the visible text box for whichever tab is active
+            if self.desc_text:
                 self.desc_text.delete("1.0", "end")
-                self.desc_text.insert("1.0", default_desc)
-            elif self._active_tab == 1 and self.desc_text:
-                self.desc_text.delete("1.0", "end")
+                self.desc_text.insert("1.0", self._desc_per_tab[self._active_tab])
 
         threading.Thread(target=worker, daemon=True).start()
 
