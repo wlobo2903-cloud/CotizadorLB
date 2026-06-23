@@ -3249,8 +3249,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("Anuncios Luminosos LB")
         self.resizable(True, True)
-        self.minsize(900, 600)
-        self.geometry("1200x800")
+        self.minsize(900, 700)
+        self.geometry("1200x920")
         self.configure(bg="#111111")
 
         self.cfg = load_config()
@@ -3305,9 +3305,29 @@ class App(tk.Tk):
         self.grid_columnconfigure(0, weight=0)   # panel izq fijo
         self.grid_columnconfigure(1, weight=1)   # panel der crece
 
-        # ══ Panel izquierdo — formulario ══════════════════════════════════
-        left = tk.Frame(self, bg=BG, padx=22, pady=22)
-        left.grid(row=0, column=0, sticky="ns")
+        # ══ Panel izquierdo — formulario (scrollable) ════════════════════
+        left_outer = tk.Frame(self, bg=BG)
+        left_outer.grid(row=0, column=0, sticky="ns")
+        left_canvas = tk.Canvas(left_outer, bg=BG, highlightthickness=0, width=260)
+        left_canvas.pack(side="left", fill="both", expand=True)
+        left_vsb = tk.Scrollbar(left_outer, orient="vertical", command=left_canvas.yview)
+        left_vsb.pack(side="right", fill="y")
+        left_canvas.configure(yscrollcommand=left_vsb.set)
+        left = tk.Frame(left_canvas, bg=BG, padx=22, pady=22)
+        _left_win = left_canvas.create_window((0, 0), window=left, anchor="nw")
+        def _on_left_configure(e):
+            left_canvas.configure(scrollregion=left_canvas.bbox("all"))
+        def _on_left_canvas_resize(e):
+            left_canvas.itemconfig(_left_win, width=e.width)
+        left.bind("<Configure>", _on_left_configure)
+        left_canvas.bind("<Configure>", _on_left_canvas_resize)
+        left_canvas.bind("<MouseWheel>",
+            lambda e: left_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+        left_canvas.bind("<Enter>",
+            lambda e: left_canvas.bind_all("<MouseWheel>",
+                lambda ev: left_canvas.yview_scroll(int(-1*(ev.delta/120)), "units")))
+        left_canvas.bind("<Leave>",
+            lambda e: left_canvas.unbind_all("<MouseWheel>"))
 
         # Logo / título
         tk.Label(left, text="L+B", bg=BG, fg=FG,
@@ -3419,9 +3439,15 @@ class App(tk.Tk):
         # ── Opciones adicionales ──────────────────────────────────────────
         tk.Label(left, text="Fijación (4 por letra)", bg=BG, fg=FG2,
                  font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 2))
-        tk.OptionMenu(left, self.esparragos_var,
-                      "Ninguno", "Espárrago", "Snaps", "Tubo roscado 10cm"
-                      ).pack(anchor="w", fill="x", pady=(0, 10))
+        om = tk.OptionMenu(left, self.esparragos_var,
+                           "Ninguno", "Espárrago", "Snaps", "Tubo roscado 10cm")
+        om.config(bg=BG3, fg=FG, activebackground="#333333", activeforeground=FG,
+                  highlightthickness=0, relief="flat", anchor="w",
+                  font=("Segoe UI", 9), bd=0, padx=8, pady=5, width=18,
+                  indicatoron=True)
+        om["menu"].config(bg=BG3, fg=FG, activebackground="#333333",
+                          activeforeground=FG, font=("Segoe UI", 9))
+        om.pack(anchor="w", fill="x", pady=(0, 10))
 
         # ── Botones acción ────────────────────────────────────────────────
         RoundedButton(left, text="Calcular cotización",
