@@ -3330,8 +3330,23 @@ class App(tk.Tk):
             lambda e: left_canvas.unbind_all("<MouseWheel>"))
 
         # Logo / título
-        tk.Label(left, text="L+B", bg=BG, fg=FG,
-                 font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        _logo_img = None
+        try:
+            from PIL import Image, ImageTk
+            _lp = os.path.join(BASE_DIR, "logo_lb.png")
+            if os.path.exists(_lp):
+                _pil = Image.open(_lp)
+                _pil.thumbnail((160, 80), Image.LANCZOS)
+                _logo_img = ImageTk.PhotoImage(_pil)
+        except Exception:
+            pass
+        if _logo_img:
+            lbl_logo = tk.Label(left, image=_logo_img, bg=BG)
+            lbl_logo.image = _logo_img   # keep reference
+            lbl_logo.pack(anchor="w", pady=(0, 4))
+        else:
+            tk.Label(left, text="L+B", bg=BG, fg=FG,
+                     font=("Segoe UI", 24, "bold")).pack(anchor="w")
         tk.Label(left, text="Anuncios Luminosos", bg=BG, fg=FG2,
                  font=("Segoe UI", 9)).pack(anchor="w")
 
