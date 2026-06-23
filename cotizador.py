@@ -3282,7 +3282,7 @@ class App(tk.Tk):
         BG2  = "#f5f5f5"   # panel derecho / resultados
         BG3  = "#222222"   # inputs en panel izq
         FG   = "#ffffff"   # texto en panel izq
-        FG2  = "#888888"   # labels secundarios panel izq
+        FG2  = "#ffffff"   # labels secundarios panel izq
         FGR  = "#1a1a1a"   # texto en panel derecho
         FGR2 = "#666666"   # texto secundario panel derecho
         DIVL = "#2a2a2a"   # divisor panel izq
@@ -3347,8 +3347,6 @@ class App(tk.Tk):
         else:
             tk.Label(left, text="L+B", bg=BG, fg=FG,
                      font=("Segoe UI", 24, "bold")).pack(anchor="w")
-        tk.Label(left, text="Anuncios Luminosos", bg=BG, fg=FG2,
-                 font=("Segoe UI", 9)).pack(anchor="w")
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
