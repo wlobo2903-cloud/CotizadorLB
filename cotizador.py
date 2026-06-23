@@ -3697,81 +3697,73 @@ class App(tk.Tk):
         def sep():
             tk.Frame(res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
-        desc = self.desc_text.get("1.0", "end-1c").strip() if self.desc_text else ""
-        if desc:
-            tk.Label(res_frame, text=desc, bg=bg, fg=fg2,
-                     font=("Segoe UI", 9), wraplength=520, justify="left",
-                     ).pack(anchor="w", pady=(0, 12))
+        tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
 
-        if not desc:
-            tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
-                     font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
+        row("Letras detectadas", str(r["n_letters"]))
+        row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
+        sep()
 
-        if not desc:
-            row("Letras detectadas", str(r["n_letters"]))
-            row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
+        n_xl   = r.get("n_xl",   0)
+        n_full = r.get("n_full", r["n_pieces"])
+        n_tall = r.get("n_tall", 0)
+        n_half = r.get("n_half", 0)
+        parts  = []
+        if n_xl:   parts.append(f"{n_xl} × 240x120")
+        if n_full: parts.append(f"{n_full} × 120x60")
+        if n_tall: parts.append(f"{n_tall} × 60x120")
+        if n_half: parts.append(f"{n_half} × 60x60")
+        billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
+        n_lam      = billing / 4
+        piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
+        row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
+        row("Laminas Acrílico Z2 240x120",
+            f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
+        row("Laminas PVC 6mm 240x120",
+            f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
+        sep()
+
+        row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
+        row("Laminas Spec (+40% merma)",
+            f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
+        row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
+        row("Laminas PVC 2mm (+40% merma)",
+            f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
+        sep()
+
+        row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
+        sep()
+
+        row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
+        row("Watts totales", f"{r['watts']} W")
+        row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
+        sep()
+
+        row("Instalacion", fmt(r['c_instalacion']))
+        pc = r.get("papel_cfg", {})
+        row("Papel plantilla",
+            f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
+            f"{r['n_papel']} pliegos ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
+            f"{fmt(r['c_papel'])}")
+        sep()
+
+        tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
+        for nombre, precio in r.get("basicos", []):
+            row(f"  {nombre}", fmt(precio))
+        row("Total basicos", fmt(r['c_basicos_total']), color=fg)
+        sep()
+
+        c_vinil = r.get("c_vinil", 0.0)
+        if c_vinil > 0:
+            row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
             sep()
 
-            n_xl   = r.get("n_xl",   0)
-            n_full = r.get("n_full", r["n_pieces"])
-            n_tall = r.get("n_tall", 0)
-            n_half = r.get("n_half", 0)
-            parts  = []
-            if n_xl:   parts.append(f"{n_xl} × 240x120")
-            if n_full: parts.append(f"{n_full} × 120x60")
-            if n_tall: parts.append(f"{n_tall} × 60x120")
-            if n_half: parts.append(f"{n_half} × 60x60")
-            billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
-            n_lam      = billing / 4
-            piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
-            row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
-            row("Laminas Acrílico Z2 240x120",
-                f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
-            row("Laminas PVC 6mm 240x120",
-                f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
+        c_esp = r.get("c_esparragos", 0.0)
+        if c_esp > 0:
+            lbl_fij = r.get("tipo_fijacion", "Fijación")
+            row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
             sep()
-
-            row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
-            row("Laminas Spec (+40% merma)",
-                f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
-            row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
-            row("Laminas PVC 2mm (+40% merma)",
-                f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
-            sep()
-
-            row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
-            sep()
-
-            row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
-            row("Watts totales", f"{r['watts']} W")
-            row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
-            sep()
-
-            row("Instalacion", fmt(r['c_instalacion']))
-            pc = r.get("papel_cfg", {})
-            row("Papel plantilla",
-                f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
-                f"{r['n_papel']} pliegos ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
-                f"{fmt(r['c_papel'])}")
-            sep()
-
-            tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
-                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
-            for nombre, precio in r.get("basicos", []):
-                row(f"  {nombre}", fmt(precio))
-            row("Total basicos", fmt(r['c_basicos_total']), color=fg)
-            sep()
-
-            c_vinil = r.get("c_vinil", 0.0)
-            if c_vinil > 0:
-                row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
-                sep()
-
-            c_esp = r.get("c_esparragos", 0.0)
-            if c_esp > 0:
-                lbl_fij = r.get("tipo_fijacion", "Fijación")
-                row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
-                sep()
 
         # Total label
         tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
