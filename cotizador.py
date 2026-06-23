@@ -3341,9 +3341,11 @@ class App(tk.Tk):
         except Exception:
             pass
         if _logo_img:
-            lbl_logo = tk.Label(left, image=_logo_img, bg=BG)
-            lbl_logo.image = _logo_img   # keep reference
-            lbl_logo.pack(anchor="w", pady=(0, 4))
+            logo_bg = tk.Frame(left, bg="#ffffff", padx=8, pady=6)
+            logo_bg.pack(anchor="w", pady=(0, 4))
+            lbl_logo = tk.Label(logo_bg, image=_logo_img, bg="#ffffff")
+            lbl_logo.image = _logo_img
+            lbl_logo.pack()
         else:
             tk.Label(left, text="L+B", bg=BG, fg=FG,
                      font=("Segoe UI", 24, "bold")).pack(anchor="w")
