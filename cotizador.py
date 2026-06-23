@@ -207,7 +207,9 @@ DEFAULT_CONFIG = {
         "fee_asociado":          0,
         "vinil_unit":          100,   # por unidad 120×60
         "vinil_transfer_extra":  60,  # extra si es con transfer
-        "esparragos_unit":      3.66, # precio por espárrago (4 por letra)
+        "esparragos_unit":      3.66, # Espárrago (4 por letra)
+        "snaps_unit":          10.00, # Snaps (4 por letra)
+        "tubo_roscado_unit":   15.00, # Tubo roscado 10cm (4 por letra)
     },
     "papel_plantilla": {
         "ancho_cm": 120,
@@ -966,9 +968,14 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     c_leds = n_rollos * p["led_rollo"]
     c_fuente      = fuente["precio"]
     c_instalacion = p.get("instalacion", 0)
-    esparragos_unit = p.get("esparragos_unit", 3.66)
+    _tipo_fijacion  = cfg.get("tipo_fijacion", "Ninguno")
+    _fij_precios    = {
+        "Espárrago":       p.get("esparragos_unit",    3.66),
+        "Snaps":           p.get("snaps_unit",         10.00),
+        "Tubo roscado 10cm": p.get("tubo_roscado_unit", 15.00),
+    }
     n_esparragos    = n_letters * 4
-    c_esparragos    = n_esparragos * esparragos_unit if cfg.get("con_esparragos", False) else 0.0
+    c_esparragos    = n_esparragos * _fij_precios[_tipo_fijacion] if _tipo_fijacion != "Ninguno" else 0.0
 
     # Papel plantilla — cubre el área total del anuncio en posición final
     all_y1 = [l["bbox_px"][1] for l in letters]
@@ -1088,8 +1095,9 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "n_papel": n_papel,
         "c_papel": c_papel,
         "papel_cfg": papel_cfg,
-        "n_esparragos": n_esparragos,
-        "c_esparragos": c_esparragos,
+        "n_esparragos":  n_esparragos,
+        "c_esparragos":  c_esparragos,
+        "tipo_fijacion": _tipo_fijacion,
         "total": total,
     }
 
@@ -1596,7 +1604,7 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
         if r.get("c_esparragos", 0):
             n_esp = r.get("n_esparragos", 0)
             u_esp = r["c_esparragos"] / n_esp if n_esp else 0
-            items_rows.append(_row("Espárragos", n_esp, u_esp, r["c_esparragos"]))
+            items_rows.append(_row(r.get("tipo_fijacion", "Fijación"), n_esp, u_esp, r["c_esparragos"]))
         if r.get("c_papel", 0):
             pc2 = r.get("papel_cfg", {})
             items_rows.append(_row(
@@ -3091,6 +3099,8 @@ class SettingsWindow(tk.Toplevel):
             ("Instalación (MXN)",                "instalacion"),
             ("Fee asociado (MXN)",               "fee_asociado"),
             ("Espárrago unidad (MXN)",           "esparragos_unit"),
+            ("Snaps unidad (MXN)",               "snaps_unit"),
+            ("Tubo roscado 10cm unidad (MXN)",   "tubo_roscado_unit"),
         ]
         for i, (lbl, key) in enumerate(fields, start=1):
             self.mat_vars[key] = self._price_row(f, i, lbl, key)
@@ -3260,7 +3270,7 @@ class App(tk.Tk):
         self._last_r          = None
         self._desc_per_tab    = ["", ""]
         self._active_tab      = 0
-        self.esparragos_var   = tk.BooleanVar(value=False)
+        self.esparragos_var   = tk.StringVar(value="Ninguno")
 
         self._build()
 
@@ -3407,11 +3417,11 @@ class App(tk.Tk):
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
 
         # ── Opciones adicionales ──────────────────────────────────────────
-        tk.Checkbutton(left, text="Espárragos (4 por letra)",
-                       variable=self.esparragos_var,
-                       bg=BG, fg=FG, selectcolor=BG3, activebackground=BG,
-                       font=("Segoe UI", 9), cursor="hand2"
-                       ).pack(anchor="w", pady=(0, 10))
+        tk.Label(left, text="Fijación (4 por letra)", bg=BG, fg=FG2,
+                 font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 2))
+        tk.OptionMenu(left, self.esparragos_var,
+                      "Ninguno", "Espárrago", "Snaps", "Tubo roscado 10cm"
+                      ).pack(anchor="w", fill="x", pady=(0, 10))
 
         # ── Botones acción ────────────────────────────────────────────────
         RoundedButton(left, text="Calcular cotización",
@@ -3607,7 +3617,7 @@ class App(tk.Tk):
 
         def worker():
             cfg_calc = dict(self.cfg)
-            cfg_calc["con_esparragos"] = self.esparragos_var.get()
+            cfg_calc["tipo_fijacion"] = self.esparragos_var.get()
             container[0] = calculate(self.svg_w_px, self.letters, rw, cfg_calc)
             self.after(0, done)
 
@@ -3733,7 +3743,8 @@ class App(tk.Tk):
 
             c_esp = r.get("c_esparragos", 0.0)
             if c_esp > 0:
-                row(f"Espárragos ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
+                lbl_fij = r.get("tipo_fijacion", "Fijación")
+                row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
                 sep()
 
         # Total label
