@@ -415,7 +415,7 @@ def parse_svg(filepath):
 # ---------------------------------------------------------------------------
 PIECE_W      = 120.0
 PIECE_H      = 60.0
-PIECE_MARGIN = 1.5    # cm margen en bordes
+PIECE_MARGIN = 0.0    # cm margen en bordes
 LETTER_GAP   = 0.8    # cm espacio entre letras
 GRID_RES     = 2.0    # cm resolución del grid de búsqueda
 ANGLES       = [0, 90, 180, 270]   # 4 orientaciones cardinales
