@@ -3757,29 +3757,23 @@ class App(tk.Tk):
         sign_types = self.cfg.get("sign_types", [])
         self._type_card_frames = []
 
-        type_sel_frame = tk.Frame(outer, bg=BG2, padx=24, pady=18)
+        type_sel_frame = tk.Frame(outer, bg=BG2, padx=16, pady=10)
         type_sel_frame.pack(fill="x")
 
-        tk.Label(type_sel_frame, text="TIPO DE ANUNCIO", bg=BG2, fg="#888888",
-                 font=("Segoe UI", 8, "bold")).grid(
-                 row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
-
-        COLS = 2
+        COLS = 3
         for i, t in enumerate(sign_types):
-            row_i = 1 + i // COLS
+            row_i = i // COLS
             col_i = i % COLS
-            card = tk.Frame(type_sel_frame, bg=BG2,
-                            highlightbackground="#dddddd",
-                            highlightthickness=2,
-                            cursor="hand2", padx=14, pady=10)
-            card.grid(row=row_i, column=col_i, padx=(0, 8), pady=(0, 8), sticky="ew")
+            color = t.get("color", "#888888")
+            card = tk.Frame(type_sel_frame, bg=color,
+                            highlightbackground=color,
+                            highlightthickness=0,
+                            cursor="hand2", padx=10, pady=6)
+            card.grid(row=row_i, column=col_i, padx=(0, 6), pady=(0, 6), sticky="ew")
             type_sel_frame.grid_columnconfigure(col_i, weight=1)
 
-            tk.Label(card, text=t["name"], bg=BG2, fg="#1a1a1a",
-                     font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
-            tk.Label(card, text=t.get("description", ""), bg=BG2, fg="#888888",
-                     font=("Segoe UI", 8), anchor="w", wraplength=200,
-                     justify="left").pack(fill="x")
+            tk.Label(card, text=t["name"], bg=color, fg="#ffffff",
+                     font=("Segoe UI", 9, "bold"), anchor="w").pack(fill="x")
 
             self._type_card_frames.append(card)
             card.bind("<Button-1>", lambda e, idx=i: self._select_type(idx))
@@ -4215,20 +4209,34 @@ class App(tk.Tk):
         elif self.letters:
             self._show_info("Pulsa «Calcular cotización» para ver el desglose.")
 
+    @staticmethod
+    def _mix_color(hex_color, factor=0.55):
+        """Blend hex_color toward white by factor (0=original, 1=white)."""
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        r = int(r + (255 - r) * factor)
+        g = int(g + (255 - g) * factor)
+        b = int(b + (255 - b) * factor)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
     def _refresh_type_cards(self):
         sign_types = self.cfg.get("sign_types", [])
         for i, card in enumerate(self._type_card_frames):
+            t = sign_types[i] if i < len(sign_types) else {}
+            color = t.get("color", "#888888")
             if i == self._sign_type_idx:
-                color = sign_types[i]["color"] if i < len(sign_types) else "#3aaa6a"
-                card.config(highlightbackground=color, highlightthickness=3,
-                            bg=sign_types[i].get("bg", "#f5f5f5"))
+                card.config(bg=color, highlightbackground="#ffffff",
+                            highlightthickness=3)
                 for child in card.winfo_children():
-                    child.config(bg=sign_types[i].get("bg", "#f5f5f5"))
+                    child.config(bg=color, fg="#ffffff",
+                                 font=("Segoe UI", 9, "bold"))
             else:
-                card.config(highlightbackground="#dddddd", highlightthickness=2,
-                            bg="#f5f5f5")
+                dim = self._mix_color(color, 0.45)
+                card.config(bg=dim, highlightbackground=dim,
+                            highlightthickness=0)
                 for child in card.winfo_children():
-                    child.config(bg="#f5f5f5")
+                    child.config(bg=dim, fg="#ffffff",
+                                 font=("Segoe UI", 9))
 
     def _apply_type_to_result(self, init_defaults=False):
         r = self._last_r
