@@ -3807,14 +3807,56 @@ class App(tk.Tk):
         for w in res_frame.winfo_children():
             w.destroy()
 
-        bg  = res_frame.cget("bg")   # hereda el color del tab
+        bg  = res_frame.cget("bg")
         fg  = "#1a1a1a"
         fg2 = "#666666"
         acc = "#1a1a1a"
 
-        def row(label, value, color=fg):
+        # ── per-display state ──────────────────────────────────────────────
+        # disabled_keys: set of string keys whose cost is excluded from total
+        # extras: list of {"name": str, "amount": float}
+        if not hasattr(r, "__getitem__"):
+            return
+        if "_disabled" not in r:
+            r["_disabled"] = set()
+        if "_extras" in r:
+            extras = r["_extras"]
+        else:
+            r["_extras"] = []
+            extras = r["_extras"]
+
+        total_lbl_var = tk.StringVar()
+
+        def _recalc_total():
+            dis = r["_disabled"]
+            base_keys = {
+                "c_acrilico", "c_pvc6", "c_aluminio", "c_pvc2",
+                "c_mano", "c_leds", "c_fuente", "c_instalacion",
+                "c_papel", "c_basicos_total", "c_vinil", "c_esparragos",
+            }
+            t = sum(r.get(k, 0.0) for k in base_keys if k not in dis)
+            for ex in r["_extras"]:
+                if ex["key"] not in dis:
+                    t += ex["amount"]
+            total_lbl_var.set(f"TOTAL:  {fmt(t)}")
+
+        def row(label, value, color=fg, key=None, amount=0.0):
             f = tk.Frame(res_frame, bg=bg)
             f.pack(fill="x", pady=2)
+            if key:
+                var = tk.BooleanVar(value=(key not in r["_disabled"]))
+                def _toggle(k=key, v=var):
+                    if v.get():
+                        r["_disabled"].discard(k)
+                    else:
+                        r["_disabled"].add(k)
+                    _recalc_total()
+                cb = tk.Checkbutton(f, variable=var, command=_toggle,
+                                    bg=bg, activebackground=bg,
+                                    relief="flat", bd=0, highlightthickness=0)
+                cb.pack(side="left")
+            else:
+                tk.Frame(f, bg=bg, width=20).pack(side="left")
             tk.Label(f, text=label, bg=bg, fg=fg2, width=36, anchor="w",
                      font=("Segoe UI", 10)).pack(side="left")
             tk.Label(f, text=value, bg=bg, fg=color,
@@ -3844,56 +3886,135 @@ class App(tk.Tk):
         piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
         row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
         row("Laminas Acrílico Z2 240x120",
-            f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}")
+            f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}",
+            key="c_acrilico")
         row("Laminas PVC 6mm 240x120",
-            f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}")
+            f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}",
+            key="c_pvc6")
         sep()
 
         row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
         row("Laminas Spec (+40% merma)",
-            f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}")
+            f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}",
+            key="c_aluminio")
         row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
         row("Laminas PVC 2mm (+40% merma)",
-            f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}")
+            f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}",
+            key="c_pvc2")
         sep()
 
-        row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
+        row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}",
+            key="c_mano")
         sep()
 
-        row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}")
+        row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}",
+            key="c_leds")
         row("Watts totales", f"{r['watts']} W")
-        row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']))
+        row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']),
+            key="c_fuente")
         sep()
 
-        row("Instalacion", fmt(r['c_instalacion']))
+        row("Instalacion", fmt(r['c_instalacion']), key="c_instalacion")
         pc = r.get("papel_cfg", {})
         row("Papel plantilla",
             f"Area {r['sign_w_cm']:.0f}x{r['sign_h_cm']:.0f} cm  →  "
             f"{r['n_papel']} pliegos ({pc.get('ancho_cm',90)}x{pc.get('alto_cm',120)} cm)  →  "
-            f"{fmt(r['c_papel'])}")
+            f"{fmt(r['c_papel'])}",
+            key="c_papel")
         sep()
 
         tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
                  font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
         for nombre, precio in r.get("basicos", []):
             row(f"  {nombre}", fmt(precio))
-        row("Total basicos", fmt(r['c_basicos_total']), color=fg)
+        row("Total basicos", fmt(r['c_basicos_total']), color=fg,
+            key="c_basicos_total")
         sep()
 
         c_vinil = r.get("c_vinil", 0.0)
         if c_vinil > 0:
-            row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg)
+            row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg,
+                key="c_vinil")
             sep()
 
         c_esp = r.get("c_esparragos", 0.0)
         if c_esp > 0:
             lbl_fij = r.get("tipo_fijacion", "Fijación")
-            row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp), color=fg)
+            row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp),
+                color=fg, key="c_esparragos")
             sep()
 
-        # Total label
-        tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(4,6))
-        tk.Label(res_frame, text=f"TOTAL:  {fmt(r['total'])}", bg=bg,
+        # ── extras ────────────────────────────────────────────────────────
+        extras_frame = tk.Frame(res_frame, bg=bg)
+        extras_frame.pack(fill="x")
+
+        def _render_extras():
+            for w in extras_frame.winfo_children():
+                w.destroy()
+            for ex in list(r["_extras"]):
+                f = tk.Frame(extras_frame, bg=bg)
+                f.pack(fill="x", pady=2)
+                var = tk.BooleanVar(value=(ex["key"] not in r["_disabled"]))
+                def _toggle_ex(k=ex["key"], v=var):
+                    if v.get():
+                        r["_disabled"].discard(k)
+                    else:
+                        r["_disabled"].add(k)
+                    _recalc_total()
+                tk.Checkbutton(f, variable=var, command=_toggle_ex,
+                               bg=bg, activebackground=bg,
+                               relief="flat", bd=0, highlightthickness=0).pack(side="left")
+                tk.Label(f, text=ex["name"], bg=bg, fg=fg2, width=36, anchor="w",
+                         font=("Segoe UI", 10)).pack(side="left")
+                tk.Label(f, text=fmt(ex["amount"]), bg=bg, fg=fg,
+                         font=("Segoe UI", 10, "bold")).pack(side="left")
+                def _del(e=ex):
+                    r["_disabled"].discard(e["key"])
+                    r["_extras"].remove(e)
+                    _render_extras()
+                    _recalc_total()
+                tk.Button(f, text="✕", bg=bg, fg="#aaaaaa", relief="flat",
+                          bd=0, font=("Segoe UI", 8), cursor="hand2",
+                          command=_del).pack(side="left", padx=(6, 0))
+            # ── add-extra form ────────────────────────────────────────────
+            add_f = tk.Frame(extras_frame, bg=bg)
+            add_f.pack(fill="x", pady=(6, 0))
+            name_var   = tk.StringVar()
+            amount_var = tk.StringVar()
+            tk.Label(add_f, text="Extra:", bg=bg, fg=fg2,
+                     font=("Segoe UI", 9)).pack(side="left")
+            name_e = tk.Entry(add_f, textvariable=name_var, width=14,
+                              font=("Segoe UI", 9), relief="solid", bd=1)
+            name_e.pack(side="left", padx=(4, 4))
+            name_e.insert(0, "Descripción")
+            name_e.bind("<FocusIn>", lambda e: name_e.delete(0, "end")
+                        if name_e.get() == "Descripción" else None)
+            amount_e = tk.Entry(add_f, textvariable=amount_var, width=8,
+                                font=("Segoe UI", 9), relief="solid", bd=1)
+            amount_e.pack(side="left", padx=(0, 4))
+            amount_e.insert(0, "0.00")
+            amount_e.bind("<FocusIn>", lambda e: amount_e.select_range(0, "end"))
+            def _add_extra():
+                name = name_var.get().strip() or "Extra"
+                try:
+                    amt = float(amount_var.get())
+                except ValueError:
+                    amt = 0.0
+                key = f"_extra_{len(r['_extras'])}_{id(name)}"
+                r["_extras"].append({"name": name, "amount": amt, "key": key})
+                _render_extras()
+                _recalc_total()
+            tk.Button(add_f, text="+ Agregar", bg="#111111", fg="#ffffff",
+                      font=("Segoe UI", 9, "bold"), relief="flat", bd=0,
+                      padx=8, pady=3, cursor="hand2",
+                      command=_add_extra).pack(side="left")
+
+        _render_extras()
+
+        # ── Total label ────────────────────────────────────────────────────
+        _recalc_total()
+        tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(8,6))
+        tk.Label(res_frame, textvariable=total_lbl_var, bg=bg,
                  fg="#1a1a1a", font=("Segoe UI", 15, "bold")).pack(
                  anchor="w", pady=(0, 4))
 
