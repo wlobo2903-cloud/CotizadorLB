@@ -2830,7 +2830,9 @@ def export_paper_svg(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
                 '</clipPath></defs>',
             ]
             lines += _letter_svg_lines(lox, loy)
-            lines += _reg_marks_svg(pw, ph)
+            lines.append(
+                f'<rect x="0" y="0" width="{pw:.4f}" height="{ph:.4f}"'
+                f' fill="none" stroke="#ff0000" stroke-width="0.05"/>')
             lines.append('</svg>')
 
             fpath = os.path.join(output_folder, f"plantilla_{n:02d}.svg")
