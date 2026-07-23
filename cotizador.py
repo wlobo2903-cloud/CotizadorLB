@@ -237,6 +237,28 @@ DEFAULT_CONFIG = {
         {"watts": 100, "precio": 711},
         {"watts": 150, "precio": 964},
     ],
+    "sign_types": [
+        {
+            "name":         "Aluminio con acrílico",
+            "description":  "Letras 3D con frente acrílico y cantos de aluminio",
+            "color":        "#3aaa6a",
+            "bg":           "#edfaf3",
+            "disabled_keys": [],
+            "default_desc": (
+                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                "con charolas de PVC. leds blanco neutro. medidas: {dims}"
+            ),
+        },
+        {
+            "name":         "Aluminio por aluminio",
+            "description":  "Letras 3D completamente en aluminio",
+            "color":        "#4f86c6",
+            "bg":           "#eef4fc",
+            "disabled_keys": ["c_acrilico", "c_pvc6"],
+            "default_desc": "",
+        },
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -245,7 +267,11 @@ DEFAULT_CONFIG = {
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            cfg = json.load(f)
+        # Migrate: add sign_types if missing (older config.json)
+        if "sign_types" not in cfg:
+            cfg["sign_types"] = json.loads(json.dumps(DEFAULT_CONFIG["sign_types"]))
+        return cfg
     return json.loads(json.dumps(DEFAULT_CONFIG))
 
 
@@ -3413,8 +3439,9 @@ class App(tk.Tk):
         self.tipo_persona_var = tk.StringVar(value="Persona Física")
         self.desc_text        = None
         self._last_r          = None
-        self._desc_per_tab    = ["", ""]
-        self._active_tab      = 0
+        self._sign_type_idx   = None   # None = sin tipo seleccionado
+        self._desc_per_type   = {}     # {idx: texto editado por el usuario}
+        self._type_card_frames= []     # frames de cada card para redibujar bordes
         self.esparragos_var   = tk.StringVar(value="Ninguno")
         self._svg_raw_bytes   = None   # bytes del SVG cargado (para embeber en .lbq)
         self._current_file    = None   # ruta del archivo .lbq activo
@@ -3670,82 +3697,44 @@ class App(tk.Tk):
             "<MouseWheel>",
             lambda e: self._res_canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
 
-        # ── Tabs de tipos de anuncio (colores por tab) ───────────────────
-        TABS = [
-            {"name": "Aluminio con acrílico",  "color": "#3aaa6a", "bg": "#edfaf3"},
-            {"name": "Aluminio por aluminio",   "color": "#4f86c6", "bg": "#eef4fc"},
-        ]
+        # ── Selector de tipo de anuncio (cards) ──────────────────────────
+        sign_types = self.cfg.get("sign_types", [])
+        self._type_card_frames = []
 
-        tab_bar = tk.Frame(outer, bg=BG2)
-        tab_bar.pack(fill="x")
+        type_sel_frame = tk.Frame(outer, bg=BG2, padx=24, pady=18)
+        type_sel_frame.pack(fill="x")
 
-        self.res_frames = []
-        self._tab_btns  = []
+        tk.Label(type_sel_frame, text="TIPO DE ANUNCIO", bg=BG2, fg="#888888",
+                 font=("Segoe UI", 8, "bold")).grid(
+                 row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
-        # Crear todos los frames y apilarlos con pack; solo el activo es visible
-        for t in TABS:
-            f = tk.Frame(outer, bg=t["bg"], padx=24, pady=24)
-            self.res_frames.append(f)
+        COLS = 2
+        for i, t in enumerate(sign_types):
+            row_i = 1 + i // COLS
+            col_i = i % COLS
+            card = tk.Frame(type_sel_frame, bg=BG2,
+                            highlightbackground="#dddddd",
+                            highlightthickness=2,
+                            cursor="hand2", padx=14, pady=10)
+            card.grid(row=row_i, column=col_i, padx=(0, 8), pady=(0, 8), sticky="ew")
+            type_sel_frame.grid_columnconfigure(col_i, weight=1)
 
-        def _aluminio_default_desc():
-            if not self._last_r:
-                return ""
-            w_cm = self._last_r.get("sign_w_cm", 0)
-            h_cm = self._last_r.get("sign_h_cm", 0)
-            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-            return (
-                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-            )
+            tk.Label(card, text=t["name"], bg=BG2, fg="#1a1a1a",
+                     font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
+            tk.Label(card, text=t.get("description", ""), bg=BG2, fg="#888888",
+                     font=("Segoe UI", 8), anchor="w", wraplength=200,
+                     justify="left").pack(fill="x")
 
-        def _switch_tab(idx):
-            # Save current description to the tab we're leaving
-            if self.desc_text:
-                self._desc_per_tab[self._active_tab] = self.desc_text.get("1.0", "end-1c")
+            self._type_card_frames.append(card)
+            card.bind("<Button-1>", lambda e, idx=i: self._select_type(idx))
+            for child in card.winfo_children():
+                child.bind("<Button-1>", lambda e, idx=i: self._select_type(idx))
 
-            for i, (f, btn_data) in enumerate(zip(self.res_frames, self._tab_btns)):
-                if i == idx:
-                    f.pack(fill="both", expand=True)
-                    btn_data["btn"].config(
-                        bg=TABS[i]["color"], fg="#ffffff",
-                        relief="flat", font=("Segoe UI", 9, "bold"))
-                    btn_data["bar"].config(bg=TABS[i]["color"])
-                else:
-                    f.pack_forget()
-                    btn_data["btn"].config(
-                        bg="#e0e0e0", fg="#555555",
-                        relief="flat", font=("Segoe UI", 9))
-                    btn_data["bar"].config(bg="#e0e0e0")
+        # ── Panel único de resultado ──────────────────────────────────────
+        self.res_frame = tk.Frame(outer, bg="#f5f5f5", padx=24, pady=24)
+        # No pack yet — se muestra al calcular con tipo seleccionado
+        self.res_frames = [self.res_frame]   # compatibilidad con _show_info
 
-            # Restore description for the new tab
-            if self.desc_text:
-                saved = self._desc_per_tab[idx]
-                if not saved and idx == 0:
-                    saved = _aluminio_default_desc()
-                    self._desc_per_tab[0] = saved
-                self.desc_text.delete("1.0", "end")
-                self.desc_text.insert("1.0", saved)
-            self._active_tab = idx
-
-        for i, t in enumerate(TABS):
-            col = tk.Frame(tab_bar, bg=BG2)
-            col.pack(side="left", padx=(0, 2))
-            btn = tk.Button(col, text=f"  {t['name']}  ",
-                            bg="#e0e0e0", fg="#555555",
-                            relief="flat", bd=0,
-                            font=("Segoe UI", 9),
-                            cursor="hand2", padx=10, pady=6,
-                            command=lambda idx=i: _switch_tab(idx))
-            btn.pack()
-            bar = tk.Frame(col, height=3, bg="#e0e0e0")
-            bar.pack(fill="x")
-            self._tab_btns.append({"btn": btn, "bar": bar})
-
-        _switch_tab(0)
-
-        # Alias para compatibilidad con código existente (tab activo)
-        self.res_frame = self.res_frames[0]
         self._result_placeholder()
 
     def _section_label(self, parent, text):
@@ -3753,14 +3742,10 @@ class App(tk.Tk):
                  font=("Segoe UI", 7, "bold")).pack(anchor="w")
 
     def _result_placeholder(self):
-        for rf in self.res_frames:
-            for w in rf.winfo_children():
-                w.destroy()
-            tk.Label(
-                rf,
-                text="Abre un archivo SVG e ingresa el ancho real para cotizar.",
-                bg=rf.cget("bg"), fg="#aaaaaa", font=("Segoe UI", 10, "italic")
-            ).pack(pady=40)
+        rf = self.res_frame
+        for w in rf.winfo_children():
+            w.destroy()
+        rf.pack_forget()
 
     def _open_file(self):
         path = filedialog.askopenfilename(
@@ -3797,11 +3782,12 @@ class App(tk.Tk):
             messagebox.showerror("Error al leer SVG", str(e))
 
     def _show_info(self, msg):
-        for rf in self.res_frames:
-            for w in rf.winfo_children():
-                w.destroy()
-            tk.Label(rf, text=msg, bg=rf.cget("bg"), fg="#4f86c6",
-                     font=("Segoe UI", 10)).pack(anchor="w")
+        rf = self.res_frame
+        for w in rf.winfo_children():
+            w.destroy()
+        tk.Label(rf, text=msg, bg=rf.cget("bg"), fg="#4f86c6",
+                 font=("Segoe UI", 10)).pack(anchor="w")
+        rf.pack(fill="both", expand=True)
 
     def _calcular(self):
         if not self.letters:
@@ -3843,28 +3829,17 @@ class App(tk.Tk):
                 return
             result["tipo_persona"] = self.tipo_persona_var.get()
             self._last_r = result
-            # Always build the aluminio default with fresh dimensions
-            w_cm = result.get("sign_w_cm", 0)
-            h_cm = result.get("sign_h_cm", 0)
-            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-            aluminio_desc = (
-                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-            )
-            self._desc_per_tab = [aluminio_desc, ""]
-            for rf in self.res_frames:
-                self._show_results(result, rf)
-            # Update the visible text box for whichever tab is active
-            if self.desc_text:
-                self.desc_text.delete("1.0", "end")
-                self.desc_text.insert("1.0", self._desc_per_tab[self._active_tab])
+            if self._sign_type_idx is None:
+                # Sin tipo seleccionado — solo mostrar aviso
+                self._show_info("← Selecciona un tipo de anuncio para ver el desglose.")
+                return
+            self._apply_type_to_result(init_defaults=True)
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _show_results(self, r, res_frame=None):
         if res_frame is None:
-            res_frame = self.res_frames[0]
+            res_frame = self.res_frame
         for w in res_frame.winfo_children():
             w.destroy()
 
@@ -4172,6 +4147,70 @@ class App(tk.Tk):
         # (add PDF button separately so it always has latest state)
         _btn(bottom, "Exportar PDF", "#111111", "#ffffff", _export_pdf, r=1, c=2)
 
+    # ── Sign type selector ────────────────────────────────────────────────
+    def _select_type(self, idx):
+        # Save current description before switching
+        if self.desc_text and self._sign_type_idx is not None:
+            self._desc_per_type[self._sign_type_idx] = self.desc_text.get("1.0", "end-1c")
+        self._sign_type_idx = idx
+        self._refresh_type_cards()
+        if self._last_r is not None:
+            self._apply_type_to_result(init_defaults=False)
+        elif self.letters:
+            self._show_info("Pulsa «Calcular cotización» para ver el desglose.")
+
+    def _refresh_type_cards(self):
+        sign_types = self.cfg.get("sign_types", [])
+        for i, card in enumerate(self._type_card_frames):
+            if i == self._sign_type_idx:
+                color = sign_types[i]["color"] if i < len(sign_types) else "#3aaa6a"
+                card.config(highlightbackground=color, highlightthickness=3,
+                            bg=sign_types[i].get("bg", "#f5f5f5"))
+                for child in card.winfo_children():
+                    child.config(bg=sign_types[i].get("bg", "#f5f5f5"))
+            else:
+                card.config(highlightbackground="#dddddd", highlightthickness=2,
+                            bg="#f5f5f5")
+                for child in card.winfo_children():
+                    child.config(bg="#f5f5f5")
+
+    def _apply_type_to_result(self, init_defaults=False):
+        r = self._last_r
+        if r is None:
+            return
+        idx = self._sign_type_idx
+        sign_types = self.cfg.get("sign_types", [])
+        t = sign_types[idx] if idx is not None and idx < len(sign_types) else {}
+        # Apply type bg to result frame
+        bg = t.get("bg", "#f5f5f5")
+        self.res_frame.config(bg=bg)
+
+        if init_defaults:
+            # Initialize disabled_keys from type definition (first time after calculate)
+            r["_disabled"] = set(t.get("disabled_keys", []))
+            r["_extras"]   = r.get("_extras", [])
+        else:
+            # When switching types: reset disabled to type defaults, keep extras
+            r["_disabled"] = set(t.get("disabled_keys", []))
+
+        self._show_results(r, self.res_frame)
+        self.res_frame.pack(fill="both", expand=True)
+
+        # Description
+        if idx not in self._desc_per_type:
+            # Build default desc for this type
+            raw = t.get("default_desc", "")
+            if raw and self._last_r:
+                w_cm = self._last_r.get("sign_w_cm", 0)
+                h_cm = self._last_r.get("sign_h_cm", 0)
+                dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+                self._desc_per_type[idx] = raw.replace("{dims}", dims)
+            else:
+                self._desc_per_type[idx] = raw
+        if self.desc_text:
+            self.desc_text.delete("1.0", "end")
+            self.desc_text.insert("1.0", self._desc_per_type.get(idx, ""))
+
     # ── File persistence ──────────────────────────────────────────────────
     def _update_title(self):
         if self._current_file:
@@ -4189,8 +4228,8 @@ class App(tk.Tk):
         cfg_keys = ("precios", "fuentes", "basicos", "papel_plantilla", "empresa")
         snapshot = {k: copy.deepcopy(self.cfg.get(k)) for k in cfg_keys if k in self.cfg}
         # Save current desc before collecting
-        if self.desc_text:
-            self._desc_per_tab[self._active_tab] = self.desc_text.get("1.0", "end-1c")
+        if self.desc_text and self._sign_type_idx is not None:
+            self._desc_per_type[self._sign_type_idx] = self.desc_text.get("1.0", "end-1c")
         return {
             "version":        1,
             "svg_b64":        base64.b64encode(self._svg_raw_bytes).decode("ascii"),
@@ -4202,8 +4241,8 @@ class App(tk.Tk):
             "empresa_cliente":self.empresa_c_var.get(),
             "direccion":      self.direccion_var.get(),
             "proyecto":       self.proyecto_var.get(),
-            "active_tab":     self._active_tab,
-            "desc_per_tab":   list(self._desc_per_tab),
+            "sign_type_idx":  self._sign_type_idx,
+            "desc_per_type":  {str(k): v for k, v in self._desc_per_type.items()},
             "cfg_snapshot":   snapshot,
             "disabled_keys":  list(r.get("_disabled", set())),
             "extras":         list(r.get("_extras", [])),
@@ -4239,8 +4278,10 @@ class App(tk.Tk):
         self.proyecto_var.set("")
         self.tipo_persona_var.set("Persona Física")
         self.esparragos_var.set("Ninguno")
-        self._desc_per_tab = ["", ""]
+        self._sign_type_idx = None
+        self._desc_per_type = {}
         self._last_r = None
+        self._refresh_type_cards()
         if self.desc_text:
             self.desc_text.delete("1.0", "end")
         self._show_info("Abre un archivo SVG e ingresa el ancho real para cotizar.")
@@ -4321,18 +4362,25 @@ class App(tk.Tk):
         self.empresa_c_var.set(data.get("empresa_cliente", ""))
         self.direccion_var.set(data.get("direccion", ""))
         self.proyecto_var.set(data.get("proyecto", ""))
-        self._desc_per_tab = list(data.get("desc_per_tab", ["", ""]))
+        # Restore desc_per_type (keys stored as strings in JSON)
+        raw_dpt = data.get("desc_per_type", {})
+        self._desc_per_type = {int(k): v for k, v in raw_dpt.items()}
+        sign_type_idx = data.get("sign_type_idx")
+        if sign_type_idx is not None:
+            sign_type_idx = int(sign_type_idx)
+        self._sign_type_idx = sign_type_idx
+        self._refresh_type_cards()
+
         # Apply cfg snapshot for calculation
         snap = data.get("cfg_snapshot")
         cfg_for_calc = copy.deepcopy(self.cfg)
         if snap:
             for k, v in snap.items():
-                if k != "empresa":   # empresa kept from live config
+                if k != "empresa":
                     cfg_for_calc[k] = v
         # Run calculation with snapshot cfg
         pending_disabled = set(data.get("disabled_keys", []))
         pending_extras   = list(data.get("extras", []))
-        active_tab       = int(data.get("active_tab", 0))
 
         real_w = self._safe_float(self.width_var.get(), 0.0)
         if not self.letters or real_w <= 0:
@@ -4353,22 +4401,10 @@ class App(tk.Tk):
             r["_disabled"] = pending_disabled
             r["_extras"]   = pending_extras
             self._last_r   = r
-            # Build aluminio default desc if tab 0 is empty
-            w_cm = r.get("sign_w_cm", 0)
-            h_cm = r.get("sign_h_cm", 0)
-            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
-            if not self._desc_per_tab[0]:
-                self._desc_per_tab[0] = (
-                    "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                    "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                    f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
-                )
-            for rf in self.res_frames:
-                self._show_results(r, rf)
-            if self.desc_text:
-                self.desc_text.delete("1.0", "end")
-                self.desc_text.insert("1.0", self._desc_per_tab[active_tab])
-            self._active_tab = active_tab
+            if self._sign_type_idx is not None:
+                self._apply_type_to_result(init_defaults=False)
+            else:
+                self._show_info("← Selecciona un tipo de anuncio para ver el desglose.")
 
         t = threading.Thread(target=_calc, daemon=True)
         t.start()
