@@ -3382,11 +3382,28 @@ class App(tk.Tk):
         self._desc_per_tab    = ["", ""]
         self._active_tab      = 0
         self.esparragos_var   = tk.StringVar(value="Ninguno")
+        self._svg_raw_bytes   = None   # bytes del SVG cargado (para embeber en .lbq)
+        self._current_file    = None   # ruta del archivo .lbq activo
 
         self._build()
 
     # ------------------------------------------------------------------
     def _build(self):
+        # ── Menubar ───────────────────────────────────────────────────────
+        menubar   = tk.Menu(self)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Nueva cotización",  accelerator="Ctrl+N",       command=self._new)
+        file_menu.add_command(label="Abrir…",            accelerator="Ctrl+O",       command=self._lbq_open)
+        file_menu.add_separator()
+        file_menu.add_command(label="Guardar",           accelerator="Ctrl+S",       command=self._save)
+        file_menu.add_command(label="Guardar como…",     accelerator="Ctrl+Shift+S", command=self._save_as)
+        menubar.add_cascade(label="Archivo", menu=file_menu)
+        self.config(menu=menubar)
+        self.bind_all("<Control-n>", lambda e: self._new())
+        self.bind_all("<Control-o>", lambda e: self._lbq_open())
+        self.bind_all("<Control-s>", lambda e: self._save())
+        self.bind_all("<Control-S>", lambda e: self._save_as())
+
         s = ttk.Style(self)
         s.theme_use("clam")
         BG   = "#111111"   # panel izquierdo
@@ -3719,6 +3736,8 @@ class App(tk.Tk):
             )
             return
         try:
+            with open(path, "rb") as _f:
+                self._svg_raw_bytes = _f.read()
             self.svg_w_px, self.letters, self.svg_w_cm = parse_svg(path)
             self.svg_path.set(os.path.basename(path))
             # Auto-fill width and reset scale to 100%
@@ -3732,6 +3751,9 @@ class App(tk.Tk):
             if n > 6:
                 names += f"… (+{n-6})"
             self._show_info(f"{n} letras detectadas: {names}")
+            # Si hay un archivo .lbq abierto, actualizarlo automáticamente
+            if self._current_file:
+                self._save()
         except Exception as e:
             messagebox.showerror("Error al leer SVG", str(e))
 
@@ -4110,6 +4132,212 @@ class App(tk.Tk):
         # Replace the nesting button command to track the window reference
         # (add PDF button separately so it always has latest state)
         _btn(bottom, "Exportar PDF", "#111111", "#ffffff", _export_pdf, r=1, c=2)
+
+    # ── File persistence ──────────────────────────────────────────────────
+    def _update_title(self):
+        if self._current_file:
+            name = os.path.basename(self._current_file)
+        else:
+            name = "Sin guardar"
+        self.title(f"CotizadorLB — {name}")
+
+    def _collect_state(self):
+        import base64, copy
+        if not self._svg_raw_bytes:
+            return None
+        svg_name = self.svg_path.get() or "letrero.svg"
+        r = self._last_r or {}
+        cfg_keys = ("precios", "fuentes", "basicos", "papel_plantilla", "empresa")
+        snapshot = {k: copy.deepcopy(self.cfg.get(k)) for k in cfg_keys if k in self.cfg}
+        # Save current desc before collecting
+        if self.desc_text:
+            self._desc_per_tab[self._active_tab] = self.desc_text.get("1.0", "end-1c")
+        return {
+            "version":        1,
+            "svg_b64":        base64.b64encode(self._svg_raw_bytes).decode("ascii"),
+            "svg_filename":   svg_name,
+            "real_width_cm":  self._safe_float(self.width_var.get(), 0.0),
+            "tipo_fijacion":  self.esparragos_var.get(),
+            "tipo_persona":   self.tipo_persona_var.get(),
+            "cliente":        self.cliente_var.get(),
+            "empresa_cliente":self.empresa_c_var.get(),
+            "direccion":      self.direccion_var.get(),
+            "proyecto":       self.proyecto_var.get(),
+            "active_tab":     self._active_tab,
+            "desc_per_tab":   list(self._desc_per_tab),
+            "cfg_snapshot":   snapshot,
+            "disabled_keys":  list(r.get("_disabled", set())),
+            "extras":         list(r.get("_extras", [])),
+        }
+
+    @staticmethod
+    def _safe_float(val, default=0.0):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
+    def _write_lbq(self, path):
+        import json as _json
+        state = self._collect_state()
+        if state is None:
+            messagebox.showwarning("Nada que guardar", "Carga un SVG primero.")
+            return False
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(state, f, indent=2, ensure_ascii=False)
+        return True
+
+    def _new(self):
+        self._current_file = None
+        self._svg_raw_bytes = None
+        self.letters = []
+        self.svg_w_px = None
+        self.svg_w_cm = None
+        self.svg_path.set("")
+        self.cliente_var.set("")
+        self.empresa_c_var.set("")
+        self.direccion_var.set("")
+        self.proyecto_var.set("")
+        self.tipo_persona_var.set("Persona Física")
+        self.esparragos_var.set("Ninguno")
+        self._desc_per_tab = ["", ""]
+        self._last_r = None
+        if self.desc_text:
+            self.desc_text.delete("1.0", "end")
+        self._show_info("Abre un archivo SVG e ingresa el ancho real para cotizar.")
+        self._update_title()
+
+    def _save(self):
+        if not self._current_file:
+            self._save_as()
+            return
+        self._write_lbq(self._current_file)
+
+    def _save_as(self):
+        path = filedialog.asksaveasfilename(
+            title="Guardar cotización",
+            defaultextension=".lbq",
+            filetypes=[("LB Quotation", "*.lbq"), ("Todos los archivos", "*.*")],
+            initialfile=self.proyecto_var.get() or "cotizacion",
+        )
+        if not path:
+            return
+        if self._write_lbq(path):
+            self._current_file = path
+            self._update_title()
+
+    def _lbq_open(self):
+        import json as _json, base64, tempfile
+        path = filedialog.askopenfilename(
+            title="Abrir cotización",
+            filetypes=[("LB Quotation", "*.lbq"), ("Todos los archivos", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+        except Exception as e:
+            messagebox.showerror("Error al abrir", str(e))
+            return
+        self._current_file = path
+        self._restore_state(data)
+        self._update_title()
+
+    def _restore_state(self, data):
+        import base64, tempfile, copy
+        # Decode SVG
+        try:
+            raw = base64.b64decode(data["svg_b64"])
+        except Exception as e:
+            messagebox.showerror("Error", f"SVG inválido en el archivo: {e}")
+            return
+        self._svg_raw_bytes = raw
+        # Write to temp file and parse
+        suffix = os.path.splitext(data.get("svg_filename", "letrero.svg"))[1] or ".svg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tf:
+            tf.write(raw)
+            tmp_path = tf.name
+        try:
+            self.svg_w_px, self.letters, self.svg_w_cm = parse_svg(tmp_path)
+        except Exception as e:
+            messagebox.showerror("Error al leer SVG", str(e))
+            return
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+        # Restore UI fields
+        self.svg_path.set(data.get("svg_filename", ""))
+        self._updating = True
+        self.width_var.set(str(data.get("real_width_cm", self.svg_w_cm or 0)))
+        self.escala_var.set("100")
+        self._updating = False
+        self.esparragos_var.set(data.get("tipo_fijacion", "Ninguno"))
+        self.tipo_persona_var.set(data.get("tipo_persona", "Persona Física"))
+        self.cliente_var.set(data.get("cliente", ""))
+        self.empresa_c_var.set(data.get("empresa_cliente", ""))
+        self.direccion_var.set(data.get("direccion", ""))
+        self.proyecto_var.set(data.get("proyecto", ""))
+        self._desc_per_tab = list(data.get("desc_per_tab", ["", ""]))
+        # Apply cfg snapshot for calculation
+        snap = data.get("cfg_snapshot")
+        cfg_for_calc = copy.deepcopy(self.cfg)
+        if snap:
+            for k, v in snap.items():
+                if k != "empresa":   # empresa kept from live config
+                    cfg_for_calc[k] = v
+        # Run calculation with snapshot cfg
+        pending_disabled = set(data.get("disabled_keys", []))
+        pending_extras   = list(data.get("extras", []))
+        active_tab       = int(data.get("active_tab", 0))
+
+        real_w = self._safe_float(self.width_var.get(), 0.0)
+        if not self.letters or real_w <= 0:
+            self._show_info("SVG restaurado — ingresa el ancho y calcula.")
+            return
+
+        import threading
+        container = [None]
+        def _calc():
+            cfg_c = dict(cfg_for_calc)
+            cfg_c["tipo_fijacion"] = self.esparragos_var.get()
+            container[0] = calculate(self.svg_w_px, self.letters, real_w, cfg_c)
+
+        def _done():
+            r = container[0]
+            if r is None:
+                return
+            r["_disabled"] = pending_disabled
+            r["_extras"]   = pending_extras
+            self._last_r   = r
+            # Build aluminio default desc if tab 0 is empty
+            w_cm = r.get("sign_w_cm", 0)
+            h_cm = r.get("sign_h_cm", 0)
+            dims = f"{w_cm:.1f} x {h_cm:.1f} cm"
+            if not self._desc_per_tab[0]:
+                self._desc_per_tab[0] = (
+                    "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
+                    "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
+                    f"con charolas de PVC. leds blanco neutro. medidas: {dims}"
+                )
+            for rf in self.res_frames:
+                self._show_results(r, rf)
+            if self.desc_text:
+                self.desc_text.delete("1.0", "end")
+                self.desc_text.insert("1.0", self._desc_per_tab[active_tab])
+            self._active_tab = active_tab
+
+        t = threading.Thread(target=_calc, daemon=True)
+        t.start()
+        self.after(50, lambda: self._poll_restore(t, _done))
+
+    def _poll_restore(self, thread, done_cb):
+        if thread.is_alive():
+            self.after(50, lambda: self._poll_restore(thread, done_cb))
+        else:
+            done_cb()
 
     def _settings(self):
         def on_save(new_cfg):
