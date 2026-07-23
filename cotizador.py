@@ -3353,6 +3353,40 @@ class SettingsWindow(tk.Toplevel):
 
 
 # ---------------------------------------------------------------------------
+# .lbq file association (Windows registry)
+# ---------------------------------------------------------------------------
+def _register_lbq_association():
+    """Register .lbq → this executable in HKCU (no admin needed). Silent on failure."""
+    import sys as _sys
+    if _sys.platform != "win32":
+        return
+    exe = _sys.executable
+    # Only register when running as a compiled .exe (not as python script)
+    if not exe.lower().endswith(".exe"):
+        return
+    try:
+        import winreg
+        # .lbq extension → ProgID
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\Classes\.lbq") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, "LBQuotation")
+        # ProgID → description
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\Classes\LBQuotation") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, "Cotización LB")
+        # Default icon
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\Classes\LBQuotation\DefaultIcon") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, f'"{exe}",0')
+        # Open command
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
+                              r"Software\Classes\LBQuotation\shell\open\command") as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, f'"{exe}" "%1"')
+    except Exception:
+        pass  # silently ignore; association is a convenience, not critical
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 class App(tk.Tk):
@@ -3386,6 +3420,11 @@ class App(tk.Tk):
         self._current_file    = None   # ruta del archivo .lbq activo
 
         self._build()
+        _register_lbq_association()
+        # Abrir archivo pasado como argumento (doble click en .lbq)
+        import sys as _sys
+        if len(_sys.argv) > 1 and _sys.argv[1].lower().endswith(".lbq"):
+            self.after(100, lambda: self._lbq_open_path(_sys.argv[1]))
 
     # ------------------------------------------------------------------
     def _build(self):
@@ -4227,13 +4266,15 @@ class App(tk.Tk):
             self._update_title()
 
     def _lbq_open(self):
-        import json as _json, base64, tempfile
         path = filedialog.askopenfilename(
             title="Abrir cotización",
             filetypes=[("LB Quotation", "*.lbq"), ("Todos los archivos", "*.*")],
         )
-        if not path:
-            return
+        if path:
+            self._lbq_open_path(path)
+
+    def _lbq_open_path(self, path):
+        import json as _json
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = _json.load(f)
