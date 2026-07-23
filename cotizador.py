@@ -1158,9 +1158,6 @@ def _reg_marks_svg(pw_cm, ph_cm, arm_cm=1.5, gap_cm=0.0, y0=0.0):
         vy1 = cy + dy * (gap_cm + arm_cm)
         lines.append(f'  <line x1="{cx:.4f}" y1="{vy0:.4f}"'
                      f' x2="{cx:.4f}" y2="{vy1:.4f}"/>')
-        # small crosshair circle at the exact corner
-        lines.append(f'  <circle cx="{cx:.4f}" cy="{cy:.4f}" r="0.15"'
-                     f' stroke-width="0.04"/>')
     lines.append('</g>')
     return lines
 
