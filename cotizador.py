@@ -2844,6 +2844,104 @@ def export_paper_svg(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
     return files
 
 
+def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_folder):
+    """
+    Export one DXF per paper sheet with cut lines (sheet border) and letter outlines.
+    Uses only LINE and LWPOLYLINE entities — no external libraries needed.
+    Units: centimeters.
+    """
+    pw = papel_cfg.get("ancho_cm", 120)
+    ph = papel_cfg.get("alto_cm",   60)
+    cols_n = max(1, math.ceil(sign_w_cm / pw))
+    rows_n = max(1, math.ceil(sign_h_cm / ph))
+    total_w = cols_n * pw
+    total_h = rows_n * ph
+    logo_off_x = (total_w - sign_w_cm) / 2
+    logo_off_y = (total_h - sign_h_cm) / 2
+
+    os.makedirs(output_folder, exist_ok=True)
+    files = []
+
+    def _dxf_header(units="cm"):
+        return [
+            "0", "SECTION", "2", "HEADER",
+            "9", "$INSUNITS", "70", "5",   # 5 = centimeters
+            "0", "ENDSEC",
+            "0", "SECTION", "2", "ENTITIES",
+        ]
+
+    def _dxf_footer():
+        return ["0", "ENDSEC", "0", "EOF"]
+
+    def _dxf_rect(x0, y0, x1, y1, layer="CUT"):
+        """Closed rectangle as 4 LINE entities."""
+        pts = [(x0,y0),(x1,y0),(x1,y1),(x0,y1),(x0,y0)]
+        lines = []
+        for i in range(4):
+            ax, ay = pts[i];  bx, by = pts[i+1]
+            lines += ["0","LINE","8",layer,
+                      "10",f"{ax:.6f}","20",f"{ay:.6f}","30","0.0",
+                      "11",f"{bx:.6f}","21",f"{by:.6f}","31","0.0"]
+        return lines
+
+    def _dxf_polyline(coords, closed=False, layer="LETTERS"):
+        """LWPOLYLINE entity from list of (x,y) tuples."""
+        flag = 1 if closed else 0
+        lines = ["0","LWPOLYLINE","8",layer,
+                 "90",str(len(coords)),"70",str(flag),"43","0.0"]
+        for x, y in coords:
+            lines += ["10",f"{x:.6f}","20",f"{y:.6f}"]
+        return lines
+
+    def _dxf_line(x0, y0, x1, y1, layer="LETTERS"):
+        return ["0","LINE","8",layer,
+                "10",f"{x0:.6f}","20",f"{y0:.6f}","30","0.0",
+                "11",f"{x1:.6f}","21",f"{y1:.6f}","31","0.0"]
+
+    for row in range(rows_n):
+        for col in range(cols_n):
+            sheet_x0 = col * pw   # sheet origin in total-grid space (cm)
+            sheet_y0 = row * ph
+            # offset to convert sign-space coords → sheet-local coords
+            lox = logo_off_x - sheet_x0
+            loy = logo_off_y - sheet_y0
+
+            entities = []
+            # Sheet border (cut line)
+            entities += _dxf_rect(0, 0, pw, ph, layer="CUT")
+
+            # Letter shapes — rects and polys only (paths need tessellation)
+            for lb in letter_bboxes_cm:
+                for shape in lb.get("shapes", []):
+                    t = shape["type"]
+                    if t == "rect":
+                        x = shape["x"] + lox;  y = shape["y"] + loy
+                        w = shape["w"];         h = shape["h"]
+                        entities += _dxf_rect(x, y, x+w, y+h, layer="LETTERS")
+                    elif t == "poly":
+                        coords = [(cx+lox, cy+loy) for cx,cy in shape["coords"]]
+                        entities += _dxf_polyline(coords, closed=shape.get("closed",False))
+                    elif t in ("circle","ellipse"):
+                        # Approximate with 36-point polyline
+                        import math as _m
+                        cx = shape.get("cx", shape.get("x",0)) + lox
+                        cy = shape.get("cy", shape.get("y",0)) + loy
+                        rx = shape.get("r", shape.get("rx", 1))
+                        ry = shape.get("r", shape.get("ry", rx))
+                        pts = [(cx + rx*_m.cos(2*_m.pi*i/36),
+                                cy + ry*_m.sin(2*_m.pi*i/36)) for i in range(36)]
+                        entities += _dxf_polyline(pts, closed=True)
+
+            idx = row * cols_n + col + 1
+            fname = f"plantilla_{idx:02d}_fila{row+1}_col{col+1}.dxf"
+            fpath = os.path.join(output_folder, fname)
+            with open(fpath, "w", encoding="ascii") as f:
+                f.write("\n".join(_dxf_header() + entities + _dxf_footer()))
+            files.append(fpath)
+
+    return files
+
+
 class PaperWindow(tk.Toplevel):
     """
     Visualización de la plantilla de papel del anuncio.
@@ -2915,6 +3013,20 @@ class PaperWindow(tk.Toplevel):
             messagebox.showinfo("Exportado",
                 f"{len(files)} archivo(s) SVG guardados en:\n{folder}")
 
+        def _do_export_dxf():
+            folder = filedialog.askdirectory(title="Carpeta de exportación DXF papel")
+            if not folder:
+                return
+            files = export_paper_dxf(
+                self._sign_w, self._sign_h,
+                self._papel_cfg, self._letter_bboxes, folder)
+            messagebox.showinfo("Exportado",
+                f"{len(files)} archivo(s) DXF guardados en:\n{folder}")
+
+        RoundedButton(hdr_row, text="Exportar DXF…", bg="#333333", fg="#ffffff",
+                      parent_bg=hdr_row.cget("bg"),
+                      font=("Segoe UI", 9, "bold"), padx=12, pady=5,
+                      command=_do_export_dxf).pack(side="right", padx=(8, 0))
         RoundedButton(hdr_row, text="Exportar SVG…", bg="#111111", fg="#ffffff",
                       parent_bg=hdr_row.cget("bg"),
                       font=("Segoe UI", 9, "bold"), padx=12, pady=5,
