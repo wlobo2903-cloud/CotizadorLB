@@ -1917,13 +1917,13 @@ def export_svg(placements, n_pieces, output_folder, piece_sizes=None):
                 sec_y0 = si * XL_SECTION_H
                 sec_h  = min(XL_SECTION_H, ph - sec_y0)
                 fpath  = os.path.join(output_folder,
-                                      f"pieza_{pi+1:02d}{labels[si]}.svg")
-                title  = f"Pieza {pi+1}{labels[si].upper()} ({sec_y0:.0f}-{sec_y0+sec_h:.0f}cm)"
+                                      f"z2_{pi+1:02d}{labels[si]}.svg")
+                title  = f"Z2 {pi+1}{labels[si].upper()} ({sec_y0:.0f}-{sec_y0+sec_h:.0f}cm)"
                 files.append(_write_section(fpath, title, pw, sec_y0, sec_h, letter_lines))
         else:
             # Single section = the whole piece (sec_y0=0)
-            fpath = os.path.join(output_folder, f"pieza_{pi+1:02d}.svg")
-            files.append(_write_section(fpath, f"Pieza {pi+1}", pw, 0.0, ph, letter_lines))
+            fpath = os.path.join(output_folder, f"z2_{pi+1:02d}.svg")
+            files.append(_write_section(fpath, f"Z2 {pi+1}", pw, 0.0, ph, letter_lines))
         files.append(fpath)
     return files
 
@@ -1959,7 +1959,7 @@ def export_dxf(placements, n_pieces, output_folder):
                 msp.add_lwpolyline(mm_pts, close=True,
                                    dxfattribs={"layer": "CORTE"})
 
-        fpath = os.path.join(output_folder, f"pieza_{pi+1:02d}.dxf")
+        fpath = os.path.join(output_folder, f"z2_{pi+1:02d}.dxf")
         doc.saveas(fpath)
         files.append(fpath)
     return files
@@ -2833,7 +2833,7 @@ def export_paper_svg(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
             lines += _reg_marks_svg(pw, ph)
             lines.append('</svg>')
 
-            fpath = os.path.join(output_folder, f"papel_{n:02d}.svg")
+            fpath = os.path.join(output_folder, f"plantilla_{n:02d}.svg")
             with open(fpath, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
             files.append(fpath)
