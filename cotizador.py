@@ -1519,7 +1519,18 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
 
     tipo_persona = r.get("tipo_persona", "Persona Física")
     aplica_isr   = tipo_persona == "Persona Moral"
-    subtotal   = r.get("total", 0.0)
+    # Recalculate subtotal respecting disabled checkboxes
+    _dis = r.get("_disabled", set())
+    _base_keys = {"c_acrilico","c_pvc6","c_aluminio","c_pvc2",
+                  "c_mano","c_leds","c_fuente","c_instalacion",
+                  "c_papel","c_vinil","c_esparragos"}
+    subtotal = sum(r.get(k, 0.0) for k in _base_keys if k not in _dis)
+    for _bi, (_bn, _bv) in enumerate(r.get("basicos", [])):
+        if f"_basico_{_bi}" not in _dis:
+            subtotal += _bv
+    for _ex in r.get("_extras", []):
+        if _ex.get("key", "") not in _dis:
+            subtotal += _ex["amount"]
     iva        = subtotal * iva_pct / 100
     isr        = subtotal * isr_pct / 100 if aplica_isr else 0.0
     imp_neto   = iva - isr
@@ -1638,59 +1649,66 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     ]
     items_rows = [hrow]
 
-    # Desglose automático (siempre visible)
-    if True:
-        def _row(desc, cant, unit, imp):
-            return [Paragraph(desc, s_norm),
-                    Paragraph(str(cant), _s("c1", alignment=1)),
-                    Paragraph(money(unit), s_right),
-                    Paragraph(money(imp),  s_right)]
+    # Desglose — respeta checkboxes desactivados (_disabled) y extras del usuario
+    disabled = r.get("_disabled", set())
 
-        def _unit(imp, qty):
-            """Precio unitario = importe / cantidad, evitando división entre cero."""
-            try:
-                q = float(qty)
-                return imp / q if q else imp
-            except (TypeError, ValueError):
-                return imp
+    def _row(desc, cant, unit, imp):
+        return [Paragraph(desc, s_norm),
+                Paragraph(str(cant), _s("c1", alignment=1)),
+                Paragraph(money(unit), s_right),
+                Paragraph(money(imp),  s_right)]
 
-        if r.get("c_acrilico", 0):
-            items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
-                f"{r['n_acrilico']:.3f}", _unit(r["c_acrilico"], r["n_acrilico"]), r["c_acrilico"]))
-        if r.get("c_pvc6", 0):
-            items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
-                f"{r['n_pvc6']:.3f}", _unit(r["c_pvc6"], r["n_pvc6"]), r["c_pvc6"]))
-        if r.get("c_aluminio", 0):
-            items_rows.append(_row("Spec (+40% merma)",
-                f"{r['n_aluminio']:.3f}", _unit(r["c_aluminio"], r["n_aluminio"]), r["c_aluminio"]))
-        if r.get("c_pvc2", 0):
-            items_rows.append(_row("PVC 2mm (+40% merma)",
-                f"{r['n_pvc2']:.3f}", _unit(r["c_pvc2"], r["n_pvc2"]), r["c_pvc2"]))
-        if r.get("c_leds", 0):
-            items_rows.append(_row("Tira LED 5m (rollo)",
-                f"{r.get('n_rollos',0):.3f}", _unit(r["c_leds"], r.get("n_rollos", 1)), r["c_leds"]))
-        if r.get("c_fuente", 0):
-            fu = r.get("fuente", {})
-            items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
-                1, r["c_fuente"], r["c_fuente"]))
-        if r.get("c_mano", 0):
-            items_rows.append(_row("Mano de obra (letras)",
-                r.get("n_letters", 0), _unit(r["c_mano"], r.get("n_letters", 1)), r["c_mano"]))
-        if r.get("c_instalacion", 0):
-            items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
-        if r.get("c_vinil", 0):
-            items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
-        if r.get("c_esparragos", 0):
-            n_esp = r.get("n_esparragos", 0)
-            u_esp = r["c_esparragos"] / n_esp if n_esp else 0
-            items_rows.append(_row(r.get("tipo_fijacion", "Fijación"), n_esp, u_esp, r["c_esparragos"]))
-        if r.get("c_papel", 0):
-            pc2 = r.get("papel_cfg", {})
-            items_rows.append(_row(
-                f"Papel plantilla {pc2.get('ancho_cm',120)}×{pc2.get('alto_cm',60)} cm",
-                r.get("n_papel",0), pc2.get("precio",0), r["c_papel"]))
-        for bn, bv in r.get("basicos", []):
+    def _unit(imp, qty):
+        try:
+            q = float(qty)
+            return imp / q if q else imp
+        except (TypeError, ValueError):
+            return imp
+
+    def _active(key, val):
+        return val and key not in disabled
+
+    if _active("c_acrilico", r.get("c_acrilico", 0)):
+        items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
+            f"{r['n_acrilico']:.3f}", _unit(r["c_acrilico"], r["n_acrilico"]), r["c_acrilico"]))
+    if _active("c_pvc6", r.get("c_pvc6", 0)):
+        items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
+            f"{r['n_pvc6']:.3f}", _unit(r["c_pvc6"], r["n_pvc6"]), r["c_pvc6"]))
+    if _active("c_aluminio", r.get("c_aluminio", 0)):
+        items_rows.append(_row("Spec (+40% merma)",
+            f"{r['n_aluminio']:.3f}", _unit(r["c_aluminio"], r["n_aluminio"]), r["c_aluminio"]))
+    if _active("c_pvc2", r.get("c_pvc2", 0)):
+        items_rows.append(_row("PVC 2mm (+40% merma)",
+            f"{r['n_pvc2']:.3f}", _unit(r["c_pvc2"], r["n_pvc2"]), r["c_pvc2"]))
+    if _active("c_leds", r.get("c_leds", 0)):
+        items_rows.append(_row("Tira LED 5m (rollo)",
+            f"{r.get('n_rollos',0):.3f}", _unit(r["c_leds"], r.get("n_rollos", 1)), r["c_leds"]))
+    if _active("c_fuente", r.get("c_fuente", 0)):
+        fu = r.get("fuente", {})
+        items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
+            1, r["c_fuente"], r["c_fuente"]))
+    if _active("c_mano", r.get("c_mano", 0)):
+        items_rows.append(_row("Mano de obra (letras)",
+            r.get("n_letters", 0), _unit(r["c_mano"], r.get("n_letters", 1)), r["c_mano"]))
+    if _active("c_instalacion", r.get("c_instalacion", 0)):
+        items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
+    if _active("c_vinil", r.get("c_vinil", 0)):
+        items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
+    if _active("c_esparragos", r.get("c_esparragos", 0)):
+        n_esp = r.get("n_esparragos", 0)
+        u_esp = r["c_esparragos"] / n_esp if n_esp else 0
+        items_rows.append(_row(r.get("tipo_fijacion", "Fijación"), n_esp, u_esp, r["c_esparragos"]))
+    if _active("c_papel", r.get("c_papel", 0)):
+        pc2 = r.get("papel_cfg", {})
+        items_rows.append(_row(
+            f"Papel plantilla {pc2.get('ancho_cm',120)}×{pc2.get('alto_cm',60)} cm",
+            r.get("n_papel",0), pc2.get("precio",0), r["c_papel"]))
+    for bi, (bn, bv) in enumerate(r.get("basicos", [])):
+        if f"_basico_{bi}" not in disabled:
             items_rows.append(_row(bn, 1, bv, bv))
+    for ex in r.get("_extras", []):
+        if ex.get("key", "") not in disabled:
+            items_rows.append(_row(ex["name"], 1, ex["amount"], ex["amount"]))
 
 
     cw = [PW*0.54, PW*0.09, PW*0.18, PW*0.19]
@@ -3002,6 +3020,27 @@ def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
                     elif t == "poly":
                         coords = [(cx+lox, cy+loy) for cx,cy in shape["coords"]]
                         entities += _dxf_polyline(coords, closed=shape.get("closed",False))
+                    elif t == "path":
+                        # Tessellate Bézier path into polyline (same approach as SVG nesting)
+                        sc   = shape.get("scale", 1.0)
+                        ox_s = shape.get("ox", 0.0)
+                        oy_s = shape.get("oy", 0.0)
+                        try:
+                            from svgpathtools import parse_path as _pp
+                            for sp_str in re.findall(r'[Mm][^Mm]+', shape["d"]):
+                                sp = _pp(sp_str)
+                                n_pts = max(12, int(sp.length() / 2))
+                                pts = []
+                                for j in range(n_pts + 1):
+                                    pt = sp.point(j / n_pts)
+                                    # px → sign-space cm → sheet-local cm
+                                    px = (pt.real - ox_s) / sc + lox
+                                    py = (pt.imag - oy_s) / sc + loy
+                                    pts.append((px, py))
+                                if len(pts) >= 2:
+                                    entities += _dxf_polyline(pts, closed=False)
+                        except Exception:
+                            pass
                     elif t in ("circle","ellipse"):
                         # Approximate with 36-point polyline
                         import math as _m
@@ -3918,9 +3957,12 @@ class App(tk.Tk):
             base_keys = {
                 "c_acrilico", "c_pvc6", "c_aluminio", "c_pvc2",
                 "c_mano", "c_leds", "c_fuente", "c_instalacion",
-                "c_papel", "c_basicos_total", "c_vinil", "c_esparragos",
+                "c_papel", "c_vinil", "c_esparragos",
             }
             t = sum(r.get(k, 0.0) for k in base_keys if k not in dis)
+            for bi, (_, bv) in enumerate(r.get("basicos", [])):
+                if f"_basico_{bi}" not in dis:
+                    t += bv
             for ex in r["_extras"]:
                 if ex["key"] not in dis:
                     t += ex["amount"]
@@ -4009,13 +4051,13 @@ class App(tk.Tk):
             key="c_papel")
         sep()
 
-        tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
-                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
-        for nombre, precio in r.get("basicos", []):
-            row(f"  {nombre}", fmt(precio))
-        row("Total basicos", fmt(r['c_basicos_total']), color=fg,
-            key="c_basicos_total")
-        sep()
+        basicos = r.get("basicos", [])
+        if basicos:
+            tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
+            for bi, (nombre, precio) in enumerate(basicos):
+                row(f"  {nombre}", fmt(precio), key=f"_basico_{bi}")
+            sep()
 
         c_vinil = r.get("c_vinil", 0.0)
         if c_vinil > 0:
