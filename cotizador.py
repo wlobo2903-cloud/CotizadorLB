@@ -199,12 +199,17 @@ DEFAULT_CONFIG = {
     "precios": {
         "acrilico_lamina":    1924,
         "aluminio_lamina":    2450,
-        "mano_obra_letra":     700,
+        "panel_aluminio_lamina": 1957.5,
+        "mano_obra_0":         100,
+        "corte_laser_metro":    15,
+        "mano_obra_1":         700,
+        "mano_obra_2":         720,
+        "mano_obra_3":         800,
         "led_rollo":           362,
         "pvc6_lamina":           0,
         "pvc2_lamina":           0,
         "instalacion":           0,
-        "fee_asociado":          0,
+        "pintura_letra":        35,
         "vinil_unit":          100,   # por unidad 120×60
         "vinil_transfer_extra":  60,  # extra si es con transfer
         "esparragos_unit":      3.66, # Espárrago (4 por letra)
@@ -239,11 +244,12 @@ DEFAULT_CONFIG = {
     ],
     "sign_types": [
         {
-            "name":         "Aluminio con acrílico",
+            "name":         "Acrílico-Aluminio",
             "description":  "Letras 3D con frente acrílico y cantos de aluminio",
             "color":        "#3aaa6a",
             "bg":           "#edfaf3",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 1,
             "default_desc": (
                 "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
                 "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
@@ -251,11 +257,12 @@ DEFAULT_CONFIG = {
             ),
         },
         {
-            "name":         "Aluminio por aluminio",
+            "name":         "Aluminio-Aluminio",
             "description":  "Letras 3D completamente en aluminio",
             "color":        "#4f86c6",
             "bg":           "#eef4fc",
-            "disabled_keys": ["c_acrilico", "c_pvc6"],
+            "disabled_keys": ["c_acrilico", "c_pvc6", "c_acrilico_cantos", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 2,
             "default_desc": "",
         },
         {
@@ -263,7 +270,8 @@ DEFAULT_CONFIG = {
             "description":  "Letras 3D con frente y cantos de acrílico",
             "color":        "#e0623a",
             "bg":           "#fdf2ee",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_aluminio", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 3,
             "default_desc": "",
         },
         {
@@ -271,15 +279,17 @@ DEFAULT_CONFIG = {
             "description":  "Letras planas de acrílico sin iluminación",
             "color":        "#c0853a",
             "bg":           "#fdf6ee",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_panel_aluminio"],
+            "mano_obra_idx": 0,
             "default_desc": "",
         },
         {
-            "name":         "Aluminio sin realce",
+            "name":         "Panel de aluminio sin realce",
             "description":  "Letras planas de aluminio sin iluminación",
             "color":        "#7a7a7a",
             "bg":           "#f5f5f5",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_acrilico"],
+            "mano_obra_idx": 0,
             "default_desc": "",
         },
         {
@@ -287,7 +297,8 @@ DEFAULT_CONFIG = {
             "description":  "Caja retroiluminada con difusor",
             "color":        "#d4a017",
             "bg":           "#fdfbee",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 1,
             "default_desc": "",
         },
         {
@@ -295,7 +306,8 @@ DEFAULT_CONFIG = {
             "description":  "Tubería de neón flex sobre base acrílica",
             "color":        "#c0398a",
             "bg":           "#fdeef7",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 1,
             "default_desc": "",
         },
         {
@@ -303,7 +315,8 @@ DEFAULT_CONFIG = {
             "description":  "Neón flex combinado con letras 3D",
             "color":        "#8a39c0",
             "bg":           "#f5eeff",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 1,
             "default_desc": "",
         },
         {
@@ -311,7 +324,8 @@ DEFAULT_CONFIG = {
             "description":  "Letras fabricadas por impresión 3D",
             "color":        "#2a9abf",
             "bg":           "#eef7fb",
-            "disabled_keys": [],
+            "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+            "mano_obra_idx": 1,
             "default_desc": "",
         },
     ],
@@ -1032,8 +1046,10 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         fuente = max(cfg["fuentes"], key=lambda f: f["watts"])
 
     p = cfg["precios"]
-    c_acrilico = n_acrilico * p["acrilico_lamina"]
-    c_aluminio = n_aluminio * p["aluminio_lamina"]
+    c_acrilico        = n_acrilico * p["acrilico_lamina"]
+    c_spec_frente     = n_acrilico * p["aluminio_lamina"]      # mismo nesting que acrílico, precio Spec
+    c_aluminio        = n_aluminio * p["aluminio_lamina"]
+    c_acrilico_cantos = n_aluminio * p["acrilico_lamina"]      # cantos en acrílico Z2 (Acrílico-Acrílico)
 
     # PVC 6mm — mismo nesting que acrílico
     n_pvc6 = n_acrilico
@@ -1044,12 +1060,16 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_pvc2 = (area_pvc2_cm2 / (240 * 120)) * 1.40   # exacto + 40% merma
     c_pvc2 = n_pvc2 * p.get("pvc2_lamina", 0)
 
-    c_mano_base   = n_letters * p["mano_obra_letra"]
+    c_panel_aluminio = n_acrilico * p.get("panel_aluminio_lamina", 1957.5)
+
+    c_mano_base   = n_letters * p.get("mano_obra_1", p.get("mano_obra_letra", 700))
     c_fee         = c_mano_base * 0.20
     c_mano        = c_mano_base + c_fee
     c_leds = n_rollos * p["led_rollo"]
     c_fuente      = fuente["precio"]
-    c_instalacion = p.get("instalacion", 0)
+    c_instalacion  = p.get("instalacion", 0)
+    c_pintura      = n_letters * p.get("pintura_letra", 35)
+    c_corte_laser  = perim_m * p.get("corte_laser_metro", 15)
     _tipo_fijacion  = cfg.get("tipo_fijacion", "Ninguno")
     _fij_precios    = {
         "Espárrago":       p.get("esparragos_unit",    3.66),
@@ -1158,13 +1178,18 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "area_pvc2_cm2": area_pvc2_cm2,
         "n_pvc2": n_pvc2,
         "c_acrilico": c_acrilico,
+        "c_spec_frente": c_spec_frente,
         "c_aluminio": c_aluminio,
+        "c_acrilico_cantos": c_acrilico_cantos,
         "c_pvc6": c_pvc6,
         "c_pvc2": c_pvc2,
         "c_mano": c_mano,
         "c_leds": c_leds,
         "c_fuente": c_fuente,
-        "c_instalacion": c_instalacion,
+        "c_panel_aluminio":   c_panel_aluminio,
+        "c_instalacion":  c_instalacion,
+        "c_pintura":      c_pintura,
+        "c_corte_laser":  c_corte_laser,
         "c_fee": c_fee,
         "basicos": c_basicos_items,
         "c_basicos_total": c_basicos_total,
@@ -1521,8 +1546,8 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     aplica_isr   = tipo_persona == "Persona Moral"
     # Recalculate subtotal respecting disabled checkboxes
     _dis = r.get("_disabled", set())
-    _base_keys = {"c_acrilico","c_pvc6","c_aluminio","c_pvc2",
-                  "c_mano","c_leds","c_fuente","c_instalacion",
+    _base_keys = {"c_acrilico","c_spec_frente","c_acrilico_cantos","c_pvc6","c_aluminio","c_pvc2",
+                  "c_panel_aluminio","c_mano","c_corte_laser","c_leds","c_fuente","c_instalacion","c_pintura",
                   "c_papel","c_vinil","c_esparragos"}
     subtotal = sum(r.get(k, 0.0) for k in _base_keys if k not in _dis)
     for _bi, (_bn, _bv) in enumerate(r.get("basicos", [])):
@@ -1668,15 +1693,24 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     def _active(key, val):
         return val and key not in disabled
 
+    if _active("c_panel_aluminio", r.get("c_panel_aluminio", 0)):
+        items_rows.append(_row("Panel Aluminio (lám. 240×120 cm)",
+            f"{r['n_acrilico']:.3f}", _unit(r["c_panel_aluminio"], r["n_acrilico"]), r["c_panel_aluminio"]))
     if _active("c_acrilico", r.get("c_acrilico", 0)):
         items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
             f"{r['n_acrilico']:.3f}", _unit(r["c_acrilico"], r["n_acrilico"]), r["c_acrilico"]))
+    if _active("c_spec_frente", r.get("c_spec_frente", 0)):
+        items_rows.append(_row("Lámina Spec frente (lám. 240×120 cm)",
+            f"{r['n_acrilico']:.3f}", _unit(r["c_spec_frente"], r["n_acrilico"]), r["c_spec_frente"]))
     if _active("c_pvc6", r.get("c_pvc6", 0)):
         items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
             f"{r['n_pvc6']:.3f}", _unit(r["c_pvc6"], r["n_pvc6"]), r["c_pvc6"]))
     if _active("c_aluminio", r.get("c_aluminio", 0)):
-        items_rows.append(_row("Spec (+40% merma)",
+        items_rows.append(_row("Lámina Spec (+40% merma)",
             f"{r['n_aluminio']:.3f}", _unit(r["c_aluminio"], r["n_aluminio"]), r["c_aluminio"]))
+    if _active("c_acrilico_cantos", r.get("c_acrilico_cantos", 0)):
+        items_rows.append(_row("Acrílico Z2 cantos (+40% merma)",
+            f"{r['n_aluminio']:.3f}", _unit(r["c_acrilico_cantos"], r["n_aluminio"]), r["c_acrilico_cantos"]))
     if _active("c_pvc2", r.get("c_pvc2", 0)):
         items_rows.append(_row("PVC 2mm (+40% merma)",
             f"{r['n_pvc2']:.3f}", _unit(r["c_pvc2"], r["n_pvc2"]), r["c_pvc2"]))
@@ -1690,6 +1724,12 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
     if _active("c_mano", r.get("c_mano", 0)):
         items_rows.append(_row("Mano de obra (letras)",
             r.get("n_letters", 0), _unit(r["c_mano"], r.get("n_letters", 1)), r["c_mano"]))
+    if _active("c_corte_laser", r.get("c_corte_laser", 0)):
+        items_rows.append(_row("Corte Láser",
+            r.get("perim_m", 0), r.get("c_corte_laser", 0) / max(r.get("perim_m", 1), 0.001), r["c_corte_laser"]))
+    if _active("c_pintura", r.get("c_pintura", 0)):
+        items_rows.append(_row("Pintura",
+            r.get("n_letters", 0), r.get("c_pintura", 0) / max(r.get("n_letters", 1), 1), r["c_pintura"]))
     if _active("c_instalacion", r.get("c_instalacion", 0)):
         items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
     if _active("c_vinil", r.get("c_vinil", 0)):
@@ -2945,6 +2985,208 @@ def export_paper_svg(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
 
 def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_folder):
     """
+    Export one DXF per paper sheet by converting the SVG output to DXF.
+    The SVG is the source of truth for geometry; this function parses it and
+    emits DXF LWPOLYLINE entities on two layers:
+      CUT     — sheet border rectangle
+      LETTERS — all letter outlines (clipped to sheet bounds)
+    Units: centimeters.
+    """
+    import xml.etree.ElementTree as ET
+    import math as _math
+    import re
+
+    pw = papel_cfg.get("ancho_cm", 120)
+    ph = papel_cfg.get("alto_cm",  60)
+
+    # ── Generate SVGs (already correct geometry) ──────────────────────────────
+    svg_files = export_paper_svg(
+        sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_folder)
+
+    # ── DXF helpers ───────────────────────────────────────────────────────────
+    def _dxf_header():
+        return ["0","SECTION","2","HEADER",
+                "9","$INSUNITS","70","5",   # 5 = centimeters
+                "0","ENDSEC","0","SECTION","2","ENTITIES"]
+
+    def _dxf_footer():
+        return ["0","ENDSEC","0","EOF"]
+
+    def _dxf_rect(x0, y0, x1, y1, layer="CUT"):
+        pts = [(x0,y0),(x1,y0),(x1,y1),(x0,y1),(x0,y0)]
+        out = []
+        for i in range(4):
+            ax,ay = pts[i]; bx,by = pts[i+1]
+            out += ["0","LINE","8",layer,
+                    "10",f"{ax:.6f}","20",f"{ay:.6f}","30","0.0",
+                    "11",f"{bx:.6f}","21",f"{by:.6f}","31","0.0"]
+        return out
+
+    def _dxf_poly(coords, layer="LETTERS"):
+        lines = ["0","LWPOLYLINE","8",layer,
+                 "90",str(len(coords)),"70","0","43","0.0"]
+        for x,y in coords:
+            lines += ["10",f"{x:.6f}","20",f"{y:.6f}"]
+        return lines
+
+    def _clip_poly(pts):
+        """Liang-Barsky per-segment clip to sheet rect [0,pw]×[0,ph]."""
+        def _lb(ax,ay,bx,by):
+            dx,dy = bx-ax,by-ay
+            t0,t1 = 0.0,1.0
+            for p,q in [(-dx,ax),(dx,pw-ax),(-dy,ay),(dy,ph-ay)]:
+                if p == 0:
+                    if q < 0: return None
+                elif p < 0:
+                    r=q/p
+                    if r>t1: return None
+                    if r>t0: t0=r
+                else:
+                    r=q/p
+                    if r<t0: return None
+                    if r<t1: t1=r
+            return (ax+t0*dx,ay+t0*dy),(ax+t1*dx,ay+t1*dy)
+        segs,cur = [],[]
+        for i in range(len(pts)-1):
+            seg = _lb(*pts[i],*pts[i+1])
+            if seg is None:
+                if cur: segs.append(cur); cur=[]
+                continue
+            p1,p2 = seg
+            if cur:
+                if abs(cur[-1][0]-p1[0])>1e-9 or abs(cur[-1][1]-p1[1])>1e-9:
+                    segs.append(cur); cur=[p1]
+            else:
+                cur=[p1]
+            cur.append(p2)
+        if cur: segs.append(cur)
+        return segs
+
+    def _emit(pts, entities):
+        # Flip Y: SVG is top-down, DXF/CAD is bottom-up
+        flipped = [(x, ph - y) for x, y in pts]
+        for sub in _clip_poly(flipped):
+            if len(sub) >= 2:
+                entities.extend(_dxf_poly(sub))
+
+    def _parse_tf(tf_str):
+        """Parse SVG transform string into affine (a,b,c,d,e,f).
+        Applied as: x'=a*x+b*y+e, y'=c*x+d*y+f. Composed left-to-right."""
+        a,b,c,d,e,f = 1.0,0.0,0.0,1.0,0.0,0.0
+        for m in re.finditer(r'(\w+)\(([^)]+)\)', tf_str):
+            fn = m.group(1)
+            args = [float(v) for v in re.split(r'[,\s]+', m.group(2).strip()) if v]
+            if fn == 'translate':
+                tx,ty = args[0],(args[1] if len(args)>1 else 0.0)
+                e += a*tx + b*ty
+                f += c*tx + d*ty
+            elif fn == 'scale':
+                sx = args[0]; sy = args[1] if len(args)>1 else sx
+                a*=sx; b*=sy; c*=sx; d*=sy
+        return a,b,c,d,e,f
+
+    def _compose_tf(parent, child):
+        """Compose two affine transforms: result = parent ∘ child."""
+        pa,pb,pc,pd,pe,pf = parent
+        ca,cb,cc,cd,ce,cf = child
+        return (pa*ca+pb*cc, pa*cb+pb*cd, pc*ca+pd*cc, pc*cb+pd*cd,
+                pa*ce+pb*cf+pe, pc*ce+pd*cf+pf)
+
+    def _xform(x, y, tf):
+        a,b,c,d,e,f = tf
+        return a*x+b*y+e, c*x+d*y+f
+
+    SVG_NS = 'http://www.w3.org/2000/svg'
+    ID_TF  = (1.0,0.0,0.0,1.0,0.0,0.0)
+
+    def _process(el, entities, inherited_tf=ID_TF):
+        tag = el.tag.replace(f'{{{SVG_NS}}}','') if SVG_NS in el.tag else el.tag
+        if tag in ('defs','clipPath','title'):
+            return
+
+        tf_str = el.get('transform','')
+        tf = _compose_tf(inherited_tf, _parse_tf(tf_str)) if tf_str else inherited_tf
+
+        def xf(x, y): return _xform(x, y, tf)
+
+        if tag == 'g':
+            for child in el:
+                _process(child, entities, inherited_tf=tf)
+
+        elif tag == 'path':
+            d = el.get('d','')
+            if not d:
+                return
+            try:
+                from svgpathtools import parse_path as _pp
+                # Scale factor from transform matrix (for sampling density)
+                sc = _math.sqrt(tf[0]**2 + tf[2]**2) or 1.0
+                for sp_str in re.findall(r'[Mm][^Mm]+', d):
+                    sp = _pp(sp_str)
+                    n_pts = max(16, int(sp.length() * sc / 0.05))
+                    pts = [xf(sp.point(j/n_pts).real, sp.point(j/n_pts).imag)
+                           for j in range(n_pts+1)]
+                    if len(pts) >= 2:
+                        _emit(pts, entities)
+            except Exception:
+                pass
+
+        elif tag == 'rect':
+            x = float(el.get('x', 0)); y = float(el.get('y', 0))
+            w = float(el.get('width', 0)); h = float(el.get('height', 0))
+            if w <= 0 or h <= 0:
+                return
+            # Skip the sheet border rect — added separately on CUT layer
+            if abs(x)<1e-4 and abs(y)<1e-4 and abs(w-pw)<1e-3 and abs(h-ph)<1e-3:
+                return
+            pts = [xf(x,y),xf(x+w,y),xf(x+w,y+h),xf(x,y+h),xf(x,y)]
+            _emit(pts, entities)
+
+        elif tag == 'circle':
+            cx = float(el.get('cx',0)); cy = float(el.get('cy',0))
+            r  = float(el.get('r',1))
+            pts = [xf(cx+r*_math.cos(2*_math.pi*i/64),
+                      cy+r*_math.sin(2*_math.pi*i/64)) for i in range(65)]
+            _emit(pts, entities)
+
+        elif tag == 'ellipse':
+            cx = float(el.get('cx',0)); cy = float(el.get('cy',0))
+            rx = float(el.get('rx',1)); ry = float(el.get('ry',rx))
+            pts = [xf(cx+rx*_math.cos(2*_math.pi*i/64),
+                      cy+ry*_math.sin(2*_math.pi*i/64)) for i in range(65)]
+            _emit(pts, entities)
+
+        elif tag in ('polyline','polygon'):
+            nums = [float(v) for v in
+                    re.split(r'[\s,]+', el.get('points','').strip()) if v]
+            pts = [xf(nums[i],nums[i+1]) for i in range(0,len(nums)-1,2)]
+            if tag == 'polygon' and pts:
+                pts.append(pts[0])
+            _emit(pts, entities)
+
+    # ── Convert each SVG → DXF ────────────────────────────────────────────────
+    dxf_files = []
+    for svg_path in svg_files:
+        with open(svg_path, 'r', encoding='utf-8') as fh:
+            svg_content = fh.read()
+
+        root = ET.fromstring(svg_content)
+        entities = []
+        entities += _dxf_rect(0, 0, pw, ph, layer="CUT")   # sheet border
+
+        for child in root:
+            _process(child, entities)
+
+        dxf_path = svg_path.replace('.svg', '.dxf')
+        with open(dxf_path, 'w', encoding='ascii') as fh:
+            fh.write('\n'.join(_dxf_header() + entities + _dxf_footer()))
+        dxf_files.append(dxf_path)
+
+    return dxf_files
+
+
+def export_paper_dxf_UNUSED(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_folder):
+    """
     Export one DXF per paper sheet with cut lines (sheet border) and letter outlines.
     Uses only LINE and LWPOLYLINE entities — no external libraries needed.
     Units: centimeters.
@@ -2960,6 +3202,42 @@ def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
 
     os.makedirs(output_folder, exist_ok=True)
     files = []
+
+    def _clip_polyline_rect(pts, x0, y0, x1, y1):
+        """Clip a polyline to rect [x0,x1]×[y0,y1] using Liang-Barsky per segment.
+        Returns a list of sub-polylines (each a list of (x,y) tuples)."""
+        def _lb(ax, ay, bx, by):
+            dx, dy = bx - ax, by - ay
+            t0, t1 = 0.0, 1.0
+            for p, q in [(-dx, ax - x0), (dx, x1 - ax),
+                         (-dy, ay - y0), (dy, y1 - ay)]:
+                if p == 0:
+                    if q < 0: return None
+                elif p < 0:
+                    r = q / p
+                    if r > t1: return None
+                    if r > t0: t0 = r
+                else:
+                    r = q / p
+                    if r < t0: return None
+                    if r < t1: t1 = r
+            return (ax + t0*dx, ay + t0*dy), (ax + t1*dx, ay + t1*dy)
+
+        segments, current = [], []
+        for i in range(len(pts) - 1):
+            seg = _lb(*pts[i], *pts[i + 1])
+            if seg is None:
+                if current: segments.append(current); current = []
+                continue
+            p1, p2 = seg
+            if current:
+                if abs(current[-1][0] - p1[0]) > 1e-9 or abs(current[-1][1] - p1[1]) > 1e-9:
+                    segments.append(current); current = [p1]
+            else:
+                current = [p1]
+            current.append(p2)
+        if current: segments.append(current)
+        return segments
 
     def _dxf_header(units="cm"):
         return [
@@ -3009,19 +3287,25 @@ def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
             # Sheet border (cut line)
             entities += _dxf_rect(0, 0, pw, ph, layer="CUT")
 
-            # Letter shapes — rects and polys only (paths need tessellation)
+            # Letter shapes — all types clipped to sheet boundary
             for lb in letter_bboxes_cm:
                 for shape in lb.get("shapes", []):
                     t = shape["type"]
                     if t == "rect":
                         x = shape["x"] + lox;  y = shape["y"] + loy
                         w = shape["w"];         h = shape["h"]
-                        entities += _dxf_rect(x, y, x+w, y+h, layer="LETTERS")
+                        pts = [(x,y),(x+w,y),(x+w,y+h),(x,y+h),(x,y)]
+                        for sub in _clip_polyline_rect(pts, 0, 0, pw, ph):
+                            if len(sub) >= 2:
+                                entities += _dxf_polyline(sub, closed=False)
                     elif t == "poly":
-                        coords = [(cx+lox, cy+loy) for cx,cy in shape["coords"]]
-                        entities += _dxf_polyline(coords, closed=shape.get("closed",False))
+                        pts = [(cx+lox, cy+loy) for cx,cy in shape["coords"]]
+                        if shape.get("closed") and pts:
+                            pts = pts + [pts[0]]
+                        for sub in _clip_polyline_rect(pts, 0, 0, pw, ph):
+                            if len(sub) >= 2:
+                                entities += _dxf_polyline(sub, closed=False)
                     elif t == "path":
-                        # Tessellate Bézier path into polyline (same approach as SVG nesting)
                         sc   = shape.get("scale", 1.0)
                         ox_s = shape.get("ox", 0.0)
                         oy_s = shape.get("oy", 0.0)
@@ -3033,24 +3317,31 @@ def export_paper_dxf(sign_w_cm, sign_h_cm, papel_cfg, letter_bboxes_cm, output_f
                                 pts = []
                                 for j in range(n_pts + 1):
                                     pt = sp.point(j / n_pts)
-                                    # px → sign-space cm → sheet-local cm
-                                    px = (pt.real - ox_s) / sc + lox
-                                    py = (pt.imag - oy_s) / sc + loy
+                                    # px → cm (multiply by sc) → sheet-local
+                                    px = (pt.real - ox_s) * sc + lox
+                                    py = (pt.imag - oy_s) * sc + loy
                                     pts.append((px, py))
                                 if len(pts) >= 2:
-                                    entities += _dxf_polyline(pts, closed=False)
+                                    is_closed = (abs(pts[0][0]-pts[-1][0]) < 0.001 and
+                                                 abs(pts[0][1]-pts[-1][1]) < 0.001)
+                                    if is_closed and len(pts) > 1:
+                                        pts = pts[:-1] + [pts[0]]
+                                    for sub in _clip_polyline_rect(pts, 0, 0, pw, ph):
+                                        if len(sub) >= 2:
+                                            entities += _dxf_polyline(sub, closed=False)
                         except Exception:
                             pass
-                    elif t in ("circle","ellipse"):
-                        # Approximate with 36-point polyline
+                    elif t in ("circle", "ellipse"):
                         import math as _m
-                        cx = shape.get("cx", shape.get("x",0)) + lox
-                        cy = shape.get("cy", shape.get("y",0)) + loy
+                        cx = shape.get("cx", shape.get("x", 0)) + lox
+                        cy = shape.get("cy", shape.get("y", 0)) + loy
                         rx = shape.get("r", shape.get("rx", 1))
                         ry = shape.get("r", shape.get("ry", rx))
                         pts = [(cx + rx*_m.cos(2*_m.pi*i/36),
-                                cy + ry*_m.sin(2*_m.pi*i/36)) for i in range(36)]
-                        entities += _dxf_polyline(pts, closed=True)
+                                cy + ry*_m.sin(2*_m.pi*i/36)) for i in range(37)]
+                        for sub in _clip_polyline_rect(pts, 0, 0, pw, ph):
+                            if len(sub) >= 2:
+                                entities += _dxf_polyline(sub, closed=False)
 
             idx = row * cols_n + col + 1
             fname = f"plantilla_{idx:02d}_fila{row+1}_col{col+1}.dxf"
@@ -3322,14 +3613,19 @@ class SettingsWindow(tk.Toplevel):
             row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12,4))
         self.mat_vars = {}
         fields = [
+            ("Panel Aluminio 240×120 (MXN)",       "panel_aluminio_lamina"),
             ("Lámina Acrílico Z2 240×120 (MXN)",  "acrilico_lamina"),
-            ("Lámina aluminio 240×120 (MXN)",   "aluminio_lamina"),
+            ("Lámina Spec 240×120 (MXN)",       "aluminio_lamina"),
             ("Lámina PVC 6mm 240×120 (MXN)",    "pvc6_lamina"),
             ("Lámina PVC 2mm 240×120 (MXN)",    "pvc2_lamina"),
-            ("Mano de obra por letra (MXN)",     "mano_obra_letra"),
+            ("Mano de obra 0 (MXN)",             "mano_obra_0"),
+            ("Corte láser por metro (MXN)",       "corte_laser_metro"),
+            ("Mano de obra 1 (MXN)",             "mano_obra_1"),
+            ("Mano de obra 2 (MXN)",             "mano_obra_2"),
+            ("Mano de obra 3 (MXN)",             "mano_obra_3"),
             ("Rollo LED 5m (MXN)",               "led_rollo"),
             ("Instalación (MXN)",                "instalacion"),
-            ("Fee asociado (MXN)",               "fee_asociado"),
+            ("Pintura por letra (MXN)",          "pintura_letra"),
             ("Espárrago unidad (MXN)",           "esparragos_unit"),
             ("Snaps unidad (MXN)",               "snaps_unit"),
             ("Tubo roscado 10cm unidad (MXN)",   "tubo_roscado_unit"),
@@ -3955,8 +4251,8 @@ class App(tk.Tk):
         def _recalc_total():
             dis = r["_disabled"]
             base_keys = {
-                "c_acrilico", "c_pvc6", "c_aluminio", "c_pvc2",
-                "c_mano", "c_leds", "c_fuente", "c_instalacion",
+                "c_acrilico", "c_spec_frente", "c_acrilico_cantos", "c_pvc6", "c_aluminio", "c_pvc2",
+                "c_panel_aluminio", "c_mano", "c_corte_laser", "c_leds", "c_fuente", "c_instalacion", "c_pintura",
                 "c_papel", "c_vinil", "c_esparragos",
             }
             t = sum(r.get(k, 0.0) for k in base_keys if k not in dis)
@@ -3993,9 +4289,14 @@ class App(tk.Tk):
         def sep():
             tk.Frame(res_frame, bg="#dddddd", height=1).pack(fill="x", pady=6)
 
-        tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
-                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 10))
+        def subtitle(text):
+            tk.Label(res_frame, text=text, bg=bg, fg=fg,
+                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(6, 2))
 
+        tk.Label(res_frame, text="COTIZACIÓN", bg=bg, fg="#888888",
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 6))
+
+        subtitle("General")
         row("Letras detectadas", str(r["n_letters"]))
         row("Perímetro total", f"{r['perim_cm']:.1f} cm  ({r['perim_m']:.2f} m)")
         sep()
@@ -4012,29 +4313,116 @@ class App(tk.Tk):
         billing    = n_xl*4 + n_full*1 + n_tall*1 + n_half*0.5
         n_lam      = billing / 4
         piezas_txt = "  +  ".join(parts) + f"  =  {n_lam:.2f} lám."
-        row("Piezas Acrílico Z2 / PVC 6mm", piezas_txt)
-        row("Laminas Acrílico Z2 240x120",
-            f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}",
-            key="c_acrilico")
-        row("Laminas PVC 6mm 240x120",
-            f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}",
-            key="c_pvc6")
+        _sign_types = self.cfg.get("sign_types", [])
+        _cur_type   = (_sign_types[self._sign_type_idx]["name"]
+                       if self._sign_type_idx is not None else "")
+        _is_al_al       = _cur_type == "Aluminio-Aluminio"
+        _is_ac_ac       = _cur_type == "Acrílico-Acrílico"
+        _is_panel_al    = _cur_type == "Panel de aluminio sin realce"
+        _is_sin_realce  = _cur_type in ("Acrílico sin realce", "Panel de aluminio sin realce")
+
+        subtitle("Caras")
+        if _is_al_al:
+            row("Piezas Lámina Spec / PVC 6mm", piezas_txt)
+            row("Láminas Spec (frente, +40% merma)",
+                f"{r['n_acrilico']:.3f}  →  {fmt(r['c_spec_frente'])}",
+                key="c_spec_frente")
+        else:
+            if _is_panel_al:
+                row("Piezas Panel Aluminio", piezas_txt)
+                row("Panel Aluminio 240x120",
+                    f"{r['n_acrilico']:.3f}  →  {fmt(r['c_panel_aluminio'])}",
+                    key="c_panel_aluminio")
+            else:
+                row("Piezas Acrílico Z2" + ("" if _is_sin_realce else " / PVC 6mm"), piezas_txt)
+                row("Láminas Acrílico Z2 240x120",
+                    f"{r['n_acrilico']:.3f}  →  {fmt(r['c_acrilico'])}",
+                    key="c_acrilico")
+        if not _is_sin_realce:
+            row("Laminas PVC 6mm 240x120",
+                f"{r['n_pvc6']:.3f}  →  {fmt(r['c_pvc6'])}",
+                key="c_pvc6")
         sep()
 
-        row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
-        row("Laminas Spec (+40% merma)",
-            f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}",
-            key="c_aluminio")
-        row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
-        row("Laminas PVC 2mm (+40% merma)",
-            f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}",
-            key="c_pvc2")
+        if not _is_sin_realce:
+            subtitle("Cantos")
+            if _is_ac_ac:
+                row("Área Acrílico Z2 (cantos)", f"{r['area_al_cm2']:.0f} cm2")
+                row("Láminas Acrílico Z2 (cantos, +40% merma)",
+                    f"{r['n_aluminio']:.3f}  →  {fmt(r['c_acrilico_cantos'])}",
+                    key="c_acrilico_cantos")
+            else:
+                row("Área Spec", f"{r['area_al_cm2']:.0f} cm2")
+                row("Láminas Spec (+40% merma)",
+                    f"{r['n_aluminio']:.3f}  →  {fmt(r['c_aluminio'])}",
+                    key="c_aluminio")
+            row("Area PVC 2mm", f"{r['area_pvc2_cm2']:.0f} cm2")
+            row("Laminas PVC 2mm (+40% merma)",
+                f"{r['n_pvc2']:.3f}  →  {fmt(r['c_pvc2'])}",
+                key="c_pvc2")
+            sep()
+
+        subtitle("Mano de Obra")
+        # ── Toggle de mano de obra ────────────────────────────────────────────
+        _mo_rates = [
+            self.cfg["precios"].get("mano_obra_0", 100),
+            self.cfg["precios"].get("mano_obra_1", 700),
+            self.cfg["precios"].get("mano_obra_2", 720),
+            self.cfg["precios"].get("mano_obra_3", 800),
+        ]
+        if "_mano_idx" not in r:
+            r["_mano_idx"] = 0
+        _mo_disp = tk.StringVar()
+
+        # Fila principal: checkbox + label + valor dinámico
+        _mo_row = tk.Frame(res_frame, bg=bg)
+        _mo_row.pack(fill="x", pady=2)
+        _mo_cb_var = tk.BooleanVar(value=("c_mano" not in r["_disabled"]))
+        def _toggle_mano(v=_mo_cb_var):
+            if v.get(): r["_disabled"].discard("c_mano")
+            else:       r["_disabled"].add("c_mano")
+            _recalc_total()
+        tk.Checkbutton(_mo_row, variable=_mo_cb_var, command=_toggle_mano,
+                       bg=bg, activebackground=bg, relief="flat", bd=0,
+                       highlightthickness=0).pack(side="left")
+        tk.Label(_mo_row, text="Mano de obra", bg=bg, fg=fg2, width=36, anchor="w",
+                 font=("Segoe UI", 10)).pack(side="left")
+        tk.Label(_mo_row, textvariable=_mo_disp, bg=bg, fg=fg,
+                 font=("Segoe UI", 10, "bold")).pack(side="left")
+
+        # Fila de botones toggle MO 1 / MO 2 / MO 3
+        _mo_btn_row = tk.Frame(res_frame, bg=bg)
+        _mo_btn_row.pack(fill="x", padx=20, pady=(0, 4))
+        _mo_btns = []
+
+        def _on_mo(idx):
+            r["_mano_idx"] = idx
+            r["c_mano"] = r.get("n_letters", 0) * _mo_rates[idx] * 1.20
+            _mo_disp.set(f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
+            _recalc_total()
+            for j, b in enumerate(_mo_btns):
+                b.config(bg=fg if j == idx else "#dddddd",
+                         fg="#ffffff" if j == idx else fg)
+
+        for _i, _lbl in enumerate(["MO 0", "MO 1", "MO 2", "MO 3"]):
+            _sel = (_i == r["_mano_idx"])
+            _b = tk.Button(_mo_btn_row, text=_lbl,
+                           bg=fg if _sel else "#dddddd",
+                           fg="#ffffff" if _sel else fg,
+                           font=("Segoe UI", 8, "bold"), relief="flat",
+                           bd=0, padx=8, pady=2, cursor="hand2",
+                           command=lambda i=_i: _on_mo(i))
+            _b.pack(side="left", padx=(0, 3))
+            _mo_btns.append(_b)
+
+        _mo_disp.set(f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}")
+        if _is_sin_realce:
+            row("Corte Láser",
+                f"{r['perim_m']:.2f} m  →  {fmt(r['c_corte_laser'])}",
+                key="c_corte_laser")
         sep()
 
-        row("Mano de obra", f"{r['n_letters']} letras  →  {fmt(r['c_mano'])}",
-            key="c_mano")
-        sep()
-
+        subtitle("Iluminación")
         row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}",
             key="c_leds")
         row("Watts totales", f"{r['watts']} W")
@@ -4042,6 +4430,7 @@ class App(tk.Tk):
             key="c_fuente")
         sep()
 
+        subtitle("Extras")
         row("Instalacion", fmt(r['c_instalacion']), key="c_instalacion")
         pc = r.get("papel_cfg", {})
         row("Papel plantilla",
@@ -4053,8 +4442,9 @@ class App(tk.Tk):
 
         basicos = r.get("basicos", [])
         if basicos:
-            tk.Label(res_frame, text="BASICOS", bg=bg, fg=acc,
+            tk.Label(res_frame, text="Básicos", bg=bg, fg=acc,
                      font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
+            row("Pintura", f"{r['n_letters']} letras  →  {fmt(r['c_pintura'])}", key="c_pintura")
             for bi, (nombre, precio) in enumerate(basicos):
                 row(f"  {nombre}", fmt(precio), key=f"_basico_{bi}")
             sep()
@@ -4160,8 +4550,11 @@ class App(tk.Tk):
             r["n_pieces"]   = n_xl + n_full + n_half
             r["n_acrilico"] = billing / 4   # láminas 240x120
             r["n_pvc6"]     = r["n_acrilico"]
-            r["c_acrilico"] = r["n_acrilico"] * self.cfg["precios"]["acrilico_lamina"]
-            r["c_pvc6"]     = r["n_pvc6"]     * self.cfg["precios"].get("pvc6_lamina", 0)
+            r["c_acrilico"]       = r["n_acrilico"] * self.cfg["precios"]["acrilico_lamina"]
+            r["c_spec_frente"]    = r["n_acrilico"] * self.cfg["precios"]["aluminio_lamina"]
+            r["c_panel_aluminio"] = r["n_acrilico"] * self.cfg["precios"].get("panel_aluminio_lamina", 1957.5)
+            r["c_acrilico_cantos"]= r["n_aluminio"] * self.cfg["precios"]["acrilico_lamina"]
+            r["c_pvc6"]           = r["n_pvc6"]     * self.cfg["precios"].get("pvc6_lamina", 0)
             r["c_vinil"]    = c_vinil
             r["total"] = (r["c_acrilico"] + r["c_aluminio"] +
                           r["c_pvc6"] + r["c_pvc2"] +
@@ -4181,7 +4574,7 @@ class App(tk.Tk):
                           padx=12, pady=6
                           ).grid(row=r, column=c, padx=(0, 6), pady=(0, 6), sticky="w")
 
-        _btn(bottom, "Nesting acrílico", "#111111", "#ffffff",
+        _btn(bottom, "Caras", "#111111", "#ffffff",
              lambda: NestingWindow(
                  self, r["n_pieces"], placements, r["n_acrilico"],
                  on_change=on_nesting_change,
@@ -4189,14 +4582,18 @@ class App(tk.Tk):
                  piece_vinil=r.get("piece_vinil", {}),
                  vinil_prices=r.get("vinil_prices", {})),
              r=0, c=0)
-        _btn(bottom, "Ver aluminio", "#e8e8e8", "#1a1a1a",
-             lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
-                                    r["n_aluminio"], strip_w=5.0, title="Aluminio"),
-             r=0, c=1)
-        _btn(bottom, "Ver PVC 2mm", "#e8e8e8", "#1a1a1a",
-             lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
-                                    r["n_pvc2"], strip_w=2.0, title="PVC 2mm"),
-             r=0, c=2)
+        _cur_type_btn = (self.cfg.get("sign_types", [])[self._sign_type_idx]["name"]
+                         if self._sign_type_idx is not None else "")
+        _is_sin_realce = _cur_type_btn in ("Acrílico sin realce", "Panel de aluminio sin realce")
+        if not _is_sin_realce:
+            _btn(bottom, "Cantos", "#e8e8e8", "#1a1a1a",
+                 lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
+                                        r["n_aluminio"], strip_w=5.0, title="Lámina Spec"),
+                 r=0, c=1)
+            _btn(bottom, "Ver PVC 2mm", "#e8e8e8", "#1a1a1a",
+                 lambda: AluminumWindow(self, r["letter_perims_cm"], r["letter_names"],
+                                        r["n_pvc2"], strip_w=2.0, title="PVC 2mm"),
+                 r=0, c=2)
         _btn(bottom, "Plantilla papel", "#e8e8e8", "#1a1a1a",
              lambda: PaperWindow(self, r["sign_w_cm"], r["sign_h_cm"],
                                  r["papel_cfg"], r["n_papel"],
@@ -4295,9 +4692,17 @@ class App(tk.Tk):
             # Initialize disabled_keys from type definition (first time after calculate)
             r["_disabled"] = set(t.get("disabled_keys", []))
             r["_extras"]   = r.get("_extras", [])
+            r["_mano_idx"] = t.get("mano_obra_idx", 0)
         else:
             # When switching types: reset disabled to type defaults, keep extras
             r["_disabled"] = set(t.get("disabled_keys", []))
+            r["_mano_idx"] = t.get("mano_obra_idx", 0)
+
+        # Recalculate c_mano based on selected rate
+        _mo_keys = ["mano_obra_0", "mano_obra_1", "mano_obra_2", "mano_obra_3"]
+        _mo_key  = _mo_keys[r["_mano_idx"]] if r["_mano_idx"] < 4 else "mano_obra_1"
+        _rate    = self.cfg["precios"].get(_mo_key, self.cfg["precios"].get("mano_obra_letra", 700))
+        r["c_mano"] = r.get("n_letters", 0) * _rate * 1.20
 
         self._show_results(r, self.res_frame)
         self.res_frame.pack(fill="both", expand=True)
@@ -4352,6 +4757,7 @@ class App(tk.Tk):
             "cfg_snapshot":   snapshot,
             "disabled_keys":  list(r.get("_disabled", set())),
             "extras":         list(r.get("_extras", [])),
+            "mano_idx":       r.get("_mano_idx", 0),
         }
 
     @staticmethod
@@ -4487,6 +4893,7 @@ class App(tk.Tk):
         # Run calculation with snapshot cfg
         pending_disabled = set(data.get("disabled_keys", []))
         pending_extras   = list(data.get("extras", []))
+        pending_mano_idx = int(data.get("mano_idx", 0))
 
         real_w = self._safe_float(self.width_var.get(), 0.0)
         if not self.letters or real_w <= 0:
@@ -4504,9 +4911,10 @@ class App(tk.Tk):
             r = container[0]
             if r is None:
                 return
-            r["_disabled"] = pending_disabled
-            r["_extras"]   = pending_extras
-            self._last_r   = r
+            r["_disabled"]  = pending_disabled
+            r["_extras"]    = pending_extras
+            r["_mano_idx"]  = pending_mano_idx
+            self._last_r    = r
             if self._sign_type_idx is not None:
                 self._apply_type_to_result(init_defaults=False)
             else:
