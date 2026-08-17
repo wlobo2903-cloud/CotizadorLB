@@ -20,24 +20,51 @@
     "tubo_roscado_unit": 15.0
   },
   "fuentes": [
-    { "watts": 15,  "precio": 197.0 },
-    { "watts": 35,  "precio": 450.0 },
-    { "watts": 60,  "precio": 636.0 },
-    { "watts": 100, "precio": 711.0 },
-    { "watts": 150, "precio": 964.0 }
+    {
+      "watts": 15,
+      "precio": 197.0
+    },
+    {
+      "watts": 35,
+      "precio": 450.0
+    },
+    {
+      "watts": 60,
+      "precio": 636.0
+    },
+    {
+      "watts": 100,
+      "precio": 711.0
+    },
+    {
+      "watts": 150,
+      "precio": 964.0
+    }
   ],
   "basicos": [
-    { "nombre": "Tornilleria",    "precio": 220.0 },
-    { "nombre": "Cable de bocina","precio": 660.0 },
-    { "nombre": "Silicon",        "precio": 155.0 },
-    { "nombre": "Otros/envio",    "precio": 600.0 }
+    {
+      "nombre": "Tornilleria",
+      "precio": 220.0
+    },
+    {
+      "nombre": "Cable de bocina",
+      "precio": 660.0
+    },
+    {
+      "nombre": "Silicon",
+      "precio": 155.0
+    },
+    {
+      "nombre": "Otros/envio",
+      "precio": 600.0
+    }
   ],
   "papel_plantilla": {
     "ancho_cm": 120.0,
     "alto_cm": 60.0,
     "precio": 15.0
   },
-  "folio": 6014,
+  "folio": 6017,
   "empresa": {
     "nombre": "Anuncios Luminosos LB",
     "logo": "logo_lb.png"
@@ -48,7 +75,13 @@
       "description": "Letras 3D con frente acrílico y cantos de aluminio",
       "color": "#3aaa6a",
       "bg": "#edfaf3",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 1,
       "default_desc": "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal y lamina de aluminio spec acabado satin clear en cantos, fijado al muro con charolas de PVC. leds blanco neutro. medidas: {dims}"
     },
@@ -57,7 +90,14 @@
       "description": "Letras 3D completamente en aluminio",
       "color": "#4f86c6",
       "bg": "#eef4fc",
-      "disabled_keys": ["c_acrilico", "c_pvc6", "c_acrilico_cantos", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_acrilico",
+        "c_pvc6",
+        "c_acrilico_cantos",
+        "c_corte_laser",
+        "c_panel_aluminio",
+        "c_pvc2"
+      ],
       "mano_obra_idx": 2,
       "default_desc": ""
     },
@@ -66,7 +106,13 @@
       "description": "Letras 3D con frente y cantos de acrílico",
       "color": "#e0623a",
       "bg": "#fdf2ee",
-      "disabled_keys": ["c_spec_frente", "c_aluminio", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_aluminio",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 3,
       "default_desc": ""
     },
@@ -75,7 +121,14 @@
       "description": "Letras planas de acrílico sin iluminación",
       "color": "#c0853a",
       "bg": "#fdf6ee",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_aluminio",
+        "c_pvc6",
+        "c_pvc2",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 0,
       "default_desc": ""
     },
@@ -84,7 +137,14 @@
       "description": "Letras planas de aluminio sin iluminación",
       "color": "#7a7a7a",
       "bg": "#f5f5f5",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_acrilico"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_aluminio",
+        "c_pvc6",
+        "c_pvc2",
+        "c_acrilico"
+      ],
       "mano_obra_idx": 0,
       "default_desc": ""
     },
@@ -93,7 +153,13 @@
       "description": "Caja retroiluminada con difusor",
       "color": "#d4a017",
       "bg": "#fdfbee",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 1,
       "default_desc": ""
     },
@@ -102,7 +168,13 @@
       "description": "Tubería de neón flex sobre base acrílica",
       "color": "#c0398a",
       "bg": "#fdeef7",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 1,
       "default_desc": ""
     },
@@ -111,7 +183,13 @@
       "description": "Neón flex combinado con letras 3D",
       "color": "#8a39c0",
       "bg": "#f5eeff",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 1,
       "default_desc": ""
     },
@@ -120,7 +198,13 @@
       "description": "Letras fabricadas por impresión 3D",
       "color": "#2a9abf",
       "bg": "#eef7fb",
-      "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
+      "disabled_keys": [
+        "c_spec_frente",
+        "c_acrilico_cantos",
+        "c_pintura",
+        "c_corte_laser",
+        "c_panel_aluminio"
+      ],
       "mano_obra_idx": 1,
       "default_desc": ""
     }

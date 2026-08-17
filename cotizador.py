@@ -261,7 +261,7 @@ DEFAULT_CONFIG = {
             "description":  "Letras 3D completamente en aluminio",
             "color":        "#4f86c6",
             "bg":           "#eef4fc",
-            "disabled_keys": ["c_acrilico", "c_pvc6", "c_acrilico_cantos", "c_corte_laser", "c_panel_aluminio"],
+            "disabled_keys": ["c_acrilico", "c_pvc6", "c_acrilico_cantos", "c_corte_laser", "c_panel_aluminio", "c_pvc2"],
             "mano_obra_idx": 2,
             "default_desc": "",
         },
@@ -1040,10 +1040,21 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     n_rollos = perim_m / 5.0
     watts_total = n_rollos * 40
 
-    fuente = max(cfg["fuentes"], key=lambda f: -f["watts"] if f["watts"] >= watts_total else float("-inf"))
-    # fallback: use largest if none fits
-    if fuente["watts"] < watts_total:
-        fuente = max(cfg["fuentes"], key=lambda f: f["watts"])
+    # Para cada tamaño de fuente, calcula cuántas unidades se necesitan y el costo total;
+    # elige la combinación más barata.
+    _best_fuente = None
+    _best_n      = 1
+    _best_cost   = float("inf")
+    for _f in cfg["fuentes"]:
+        _n = math.ceil(watts_total / _f["watts"]) if watts_total > 0 else 1
+        _n = max(_n, 1)
+        _cost = _n * _f["precio"]
+        if _cost < _best_cost:
+            _best_cost   = _cost
+            _best_fuente = _f
+            _best_n      = _n
+    fuente   = _best_fuente or cfg["fuentes"][-1]
+    n_fuente = _best_n
 
     p = cfg["precios"]
     c_acrilico        = n_acrilico * p["acrilico_lamina"]
@@ -1066,7 +1077,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
     c_fee         = c_mano_base * 0.20
     c_mano        = c_mano_base + c_fee
     c_leds = n_rollos * p["led_rollo"]
-    c_fuente      = fuente["precio"]
+    c_fuente      = n_fuente * fuente["precio"]
     c_instalacion  = p.get("instalacion", 0)
     c_pintura      = n_letters * p.get("pintura_letra", 35)
     c_corte_laser  = perim_m * p.get("corte_laser_metro", 15)
@@ -1174,6 +1185,7 @@ def calculate(svg_w_px, letters, real_width_cm, cfg):
         "n_rollos": n_rollos,
         "watts": watts_total,
         "fuente": fuente,
+        "n_fuente": n_fuente,
         "n_pvc6": n_pvc6,
         "area_pvc2_cm2": area_pvc2_cm2,
         "n_pvc2": n_pvc2,
@@ -1658,100 +1670,21 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
         s_norm))
     SP(8)
 
-    if desc_txt and desc_txt.strip():
-        story.append(Paragraph(
-            desc_txt.strip().replace("\n", "<br/>"),
-            _s("desc_comp", fontSize=9, leading=13, textColor=colors.HexColor("#333333"))))
-        SP(8)
-
-    # ── Tabla de items ────────────────────────────────────────────────────
+    # ── Tabla de items (una sola fila: descripción + subtotal) ───────────────
     th_style = _s("th2", fontName="Helvetica-Bold", fontSize=8, textColor=BLACK)
-    hrow = [
-        Paragraph("DESCRIPCIÓN", th_style),
-        Paragraph("CANT.", _s("thc", fontName="Helvetica-Bold", fontSize=8, alignment=1)),
-        Paragraph("UNITARIO", _s("thr", fontName="Helvetica-Bold", fontSize=8, alignment=2)),
-        Paragraph("IMPORTE",  _s("thr2",fontName="Helvetica-Bold", fontSize=8, alignment=2)),
+    _desc_pdf = desc_txt.strip().replace("\n", "<br/>") if desc_txt and desc_txt.strip() else proyecto or "Fabricación de anuncio"
+    items_rows = [
+        [
+            Paragraph("DESCRIPCIÓN", th_style),
+            Paragraph("IMPORTE", _s("thr2", fontName="Helvetica-Bold", fontSize=8, alignment=2)),
+        ],
+        [
+            Paragraph(_desc_pdf, s_norm),
+            Paragraph(money(subtotal), s_right),
+        ],
     ]
-    items_rows = [hrow]
 
-    # Desglose — respeta checkboxes desactivados (_disabled) y extras del usuario
-    disabled = r.get("_disabled", set())
-
-    def _row(desc, cant, unit, imp):
-        return [Paragraph(desc, s_norm),
-                Paragraph(str(cant), _s("c1", alignment=1)),
-                Paragraph(money(unit), s_right),
-                Paragraph(money(imp),  s_right)]
-
-    def _unit(imp, qty):
-        try:
-            q = float(qty)
-            return imp / q if q else imp
-        except (TypeError, ValueError):
-            return imp
-
-    def _active(key, val):
-        return val and key not in disabled
-
-    if _active("c_panel_aluminio", r.get("c_panel_aluminio", 0)):
-        items_rows.append(_row("Panel Aluminio (lám. 240×120 cm)",
-            f"{r['n_acrilico']:.3f}", _unit(r["c_panel_aluminio"], r["n_acrilico"]), r["c_panel_aluminio"]))
-    if _active("c_acrilico", r.get("c_acrilico", 0)):
-        items_rows.append(_row("Acrílico Z2 (lám. 240×120 cm)",
-            f"{r['n_acrilico']:.3f}", _unit(r["c_acrilico"], r["n_acrilico"]), r["c_acrilico"]))
-    if _active("c_spec_frente", r.get("c_spec_frente", 0)):
-        items_rows.append(_row("Lámina Spec frente (lám. 240×120 cm)",
-            f"{r['n_acrilico']:.3f}", _unit(r["c_spec_frente"], r["n_acrilico"]), r["c_spec_frente"]))
-    if _active("c_pvc6", r.get("c_pvc6", 0)):
-        items_rows.append(_row("PVC 6mm (lám. 240×120 cm)",
-            f"{r['n_pvc6']:.3f}", _unit(r["c_pvc6"], r["n_pvc6"]), r["c_pvc6"]))
-    if _active("c_aluminio", r.get("c_aluminio", 0)):
-        items_rows.append(_row("Lámina Spec (+40% merma)",
-            f"{r['n_aluminio']:.3f}", _unit(r["c_aluminio"], r["n_aluminio"]), r["c_aluminio"]))
-    if _active("c_acrilico_cantos", r.get("c_acrilico_cantos", 0)):
-        items_rows.append(_row("Acrílico Z2 cantos (+40% merma)",
-            f"{r['n_aluminio']:.3f}", _unit(r["c_acrilico_cantos"], r["n_aluminio"]), r["c_acrilico_cantos"]))
-    if _active("c_pvc2", r.get("c_pvc2", 0)):
-        items_rows.append(_row("PVC 2mm (+40% merma)",
-            f"{r['n_pvc2']:.3f}", _unit(r["c_pvc2"], r["n_pvc2"]), r["c_pvc2"]))
-    if _active("c_leds", r.get("c_leds", 0)):
-        items_rows.append(_row("Tira LED 5m (rollo)",
-            f"{r.get('n_rollos',0):.3f}", _unit(r["c_leds"], r.get("n_rollos", 1)), r["c_leds"]))
-    if _active("c_fuente", r.get("c_fuente", 0)):
-        fu = r.get("fuente", {})
-        items_rows.append(_row(f"Fuente de poder {fu.get('watts','')}W",
-            1, r["c_fuente"], r["c_fuente"]))
-    if _active("c_mano", r.get("c_mano", 0)):
-        items_rows.append(_row("Mano de obra (letras)",
-            r.get("n_letters", 0), _unit(r["c_mano"], r.get("n_letters", 1)), r["c_mano"]))
-    if _active("c_corte_laser", r.get("c_corte_laser", 0)):
-        items_rows.append(_row("Corte Láser",
-            r.get("perim_m", 0), r.get("c_corte_laser", 0) / max(r.get("perim_m", 1), 0.001), r["c_corte_laser"]))
-    if _active("c_pintura", r.get("c_pintura", 0)):
-        items_rows.append(_row("Pintura",
-            r.get("n_letters", 0), r.get("c_pintura", 0) / max(r.get("n_letters", 1), 1), r["c_pintura"]))
-    if _active("c_instalacion", r.get("c_instalacion", 0)):
-        items_rows.append(_row("Instalación", 1, r["c_instalacion"], r["c_instalacion"]))
-    if _active("c_vinil", r.get("c_vinil", 0)):
-        items_rows.append(_row("Vinil / transfer (plantillas)", 1, r["c_vinil"], r["c_vinil"]))
-    if _active("c_esparragos", r.get("c_esparragos", 0)):
-        n_esp = r.get("n_esparragos", 0)
-        u_esp = r["c_esparragos"] / n_esp if n_esp else 0
-        items_rows.append(_row(r.get("tipo_fijacion", "Fijación"), n_esp, u_esp, r["c_esparragos"]))
-    if _active("c_papel", r.get("c_papel", 0)):
-        pc2 = r.get("papel_cfg", {})
-        items_rows.append(_row(
-            f"Papel plantilla {pc2.get('ancho_cm',120)}×{pc2.get('alto_cm',60)} cm",
-            r.get("n_papel",0), pc2.get("precio",0), r["c_papel"]))
-    for bi, (bn, bv) in enumerate(r.get("basicos", [])):
-        if f"_basico_{bi}" not in disabled:
-            items_rows.append(_row(bn, 1, bv, bv))
-    for ex in r.get("_extras", []):
-        if ex.get("key", "") not in disabled:
-            items_rows.append(_row(ex["name"], 1, ex["amount"], ex["amount"]))
-
-
-    cw = [PW*0.54, PW*0.09, PW*0.18, PW*0.19]
+    cw = [PW*0.81, PW*0.19]
     items_tbl = Table(items_rows, colWidths=cw, repeatRows=1)
     n_rows = len(items_rows)
     items_tbl.setStyle(TableStyle([
@@ -1759,14 +1692,13 @@ def export_pdf(r, placements, piece_sizes, n_pieces, output_path):
         ("FONTSIZE",      (0,0),(-1,-1), 9),
         ("VALIGN",        (0,0),(-1,-1), "TOP"),
         ("ALIGN",         (1,0),(-1,-1), "RIGHT"),
-        ("ALIGN",         (1,0),(1,-1),  "CENTER"),
         ("TOPPADDING",    (0,0),(-1,-1), 5),
         ("BOTTOMPADDING", (0,0),(-1,-1), 5),
         ("LEFTPADDING",   (0,0),(-1,-1), 4),
         ("RIGHTPADDING",  (0,0),(-1,-1), 4),
-        ("LINEBELOW",     (0,0),(-1,0),  0.6, BLACK),   # bajo header
-        ("LINEBELOW",     (0,n_rows-1),(-1,n_rows-1), 0.6, BLACK),  # bajo último
-        ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white, colors.HexColor("#f8f8f8")]),
+        ("LINEBELOW",     (0,0),(-1,0),  0.6, BLACK),
+        ("LINEBELOW",     (0,n_rows-1),(-1,n_rows-1), 0.6, BLACK),
+        ("ROWBACKGROUNDS",(0,1),(-1,-1), [colors.white]),
     ]))
     story.append(items_tbl)
     SP(6)
@@ -4246,7 +4178,8 @@ class App(tk.Tk):
             r["_extras"] = []
             extras = r["_extras"]
 
-        total_lbl_var = tk.StringVar()
+        total_lbl_var    = tk.StringVar()
+        subtotal_lbl_var = tk.StringVar()
 
         def _recalc_total():
             dis = r["_disabled"]
@@ -4262,7 +4195,17 @@ class App(tk.Tk):
             for ex in r["_extras"]:
                 if ex["key"] not in dis:
                     t += ex["amount"]
-            total_lbl_var.set(f"TOTAL:  {fmt(t)}")
+            _iva_pct = self.cfg.get("empresa", {}).get("iva_pct", 16.0)
+            _isr_pct = self.cfg.get("empresa", {}).get("isr_pct", 1.25)
+            _aplica_isr = r.get("tipo_persona", "Persona Física") == "Persona Moral"
+            _iva = t * _iva_pct / 100
+            _isr = t * _isr_pct / 100 if _aplica_isr else 0.0
+            _total = t + _iva - _isr
+            subtotal_lbl_var.set(
+                f"Subtotal: {fmt(t)}   IVA {_iva_pct:.0f}%: {fmt(_iva)}"
+                + (f"   ISR -{_isr_pct:.2f}%: -{fmt(_isr)}" if _aplica_isr else "")
+            )
+            total_lbl_var.set(f"TOTAL:  {fmt(_total)}")
 
         def row(label, value, color=fg, key=None, amount=0.0):
             f = tk.Frame(res_frame, bg=bg)
@@ -4426,8 +4369,10 @@ class App(tk.Tk):
         row("Rollos LED (5m)", f"{r['n_rollos']:.3f}  →  {fmt(r['c_leds'])}",
             key="c_leds")
         row("Watts totales", f"{r['watts']} W")
-        row(f"Fuente de poder ({r['fuente']['watts']}W)", fmt(r['c_fuente']),
-            key="c_fuente")
+        _nf = r.get("n_fuente", 1)
+        _fw = r["fuente"]["watts"]
+        _fuente_lbl = f"Fuente de poder ({_nf}× {_fw}W)" if _nf > 1 else f"Fuente de poder ({_fw}W)"
+        row(_fuente_lbl, fmt(r['c_fuente']), key="c_fuente")
         sep()
 
         subtitle("Extras")
@@ -4530,8 +4475,11 @@ class App(tk.Tk):
         _render_extras()
 
         # ── Total label ────────────────────────────────────────────────────
+        self.tipo_persona_var.trace_add("write", lambda *_: _recalc_total())
         _recalc_total()
         tk.Frame(res_frame, bg="#1a1a1a", height=2).pack(fill="x", pady=(8,6))
+        tk.Label(res_frame, textvariable=subtotal_lbl_var, bg=bg,
+                 fg="#888888", font=("Segoe UI", 9)).pack(anchor="w", pady=(0, 2))
         tk.Label(res_frame, textvariable=total_lbl_var, bg=bg,
                  fg="#1a1a1a", font=("Segoe UI", 15, "bold")).pack(
                  anchor="w", pady=(0, 4))
