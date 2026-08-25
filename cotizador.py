@@ -250,11 +250,7 @@ DEFAULT_CONFIG = {
             "bg":           "#edfaf3",
             "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
             "mano_obra_idx": 1,
-            "default_desc": (
-                "Fabricación de anuncio en 3d hecho de acrilico en la parte frontal "
-                "y lamina de aluminio spec acabado satin clear en cantos, fijado al muro "
-                "con charolas de PVC. leds blanco neutro. medidas: {dims}"
-            ),
+            "default_desc": "Fabricación e instalación de anuncio en 3d hecho de acrilico en la parte frontal y lamina de aluminio spec acabado satin clear en cantos, fijado al muro con charolas de pvc directo al muro. Iluminación directa a base de leds blanco neutro.",
         },
         {
             "name":         "Aluminio-Aluminio",
@@ -263,7 +259,7 @@ DEFAULT_CONFIG = {
             "bg":           "#eef4fc",
             "disabled_keys": ["c_acrilico", "c_pvc6", "c_acrilico_cantos", "c_corte_laser", "c_panel_aluminio", "c_pvc2"],
             "mano_obra_idx": 2,
-            "default_desc": "",
+            "default_desc": "Fabricación e instalación de anuncio en 3d hecho de lámina de aluminio spec acabado satin clear en frente y cantos, fijado al muro con snaps con una separación del muro de 1 cms para permitir salida de luz a base de leds blanco neutro.",
         },
         {
             "name":         "Acrílico-Acrílico",
@@ -272,7 +268,7 @@ DEFAULT_CONFIG = {
             "bg":           "#fdf2ee",
             "disabled_keys": ["c_spec_frente", "c_aluminio", "c_pintura", "c_corte_laser", "c_panel_aluminio"],
             "mano_obra_idx": 3,
-            "default_desc": "",
+            "default_desc": "Fabricación e instalación de anuncio en 3d hecho de acrilico en frentes y cantos, fijado al muro con snaps con una separación del muro de 1 cms para permitir salida de luz a base de leds blanco neutro.",
         },
         {
             "name":         "Acrílico sin realce",
@@ -281,7 +277,7 @@ DEFAULT_CONFIG = {
             "bg":           "#fdf6ee",
             "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_panel_aluminio"],
             "mano_obra_idx": 0,
-            "default_desc": "",
+            "default_desc": "Fabricación e instalación de anuncio de panel de aluminio sin realce, fijado al muro con snaps con una separación del muro de 1 cms para permitir salida de luz a base de leds blanco neutro.",
         },
         {
             "name":         "Panel de aluminio sin realce",
@@ -290,7 +286,7 @@ DEFAULT_CONFIG = {
             "bg":           "#f5f5f5",
             "disabled_keys": ["c_spec_frente", "c_acrilico_cantos", "c_aluminio", "c_pvc6", "c_pvc2", "c_acrilico"],
             "mano_obra_idx": 0,
-            "default_desc": "",
+            "default_desc": "Fabricación e instalación de anuncio de panel de aluminio sin realce, fijado al muro con snaps con una separación del muro de 1 cms para permitir salida de luz a base de leds blanco neutro.",
         },
         {
             "name":         "Cajas de luz",
