@@ -3632,29 +3632,54 @@ class SettingsWindow(tk.Toplevel):
 
     # ── Tab 1: Materiales ──────────────────────────────────────────────────
     def _tab_materiales(self, f):
-        self._lbl(f, "Materiales y mano de obra", bold=True).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(12,4))
         self.mat_vars = {}
-        fields = [
-            ("Panel Aluminio 240×120 (MXN)",       "panel_aluminio_lamina"),
-            ("Lámina Acrílico Z2 240×120 (MXN)",  "acrilico_lamina"),
-            ("Lámina Spec 240×120 (MXN)",       "aluminio_lamina"),
-            ("Lámina PVC 6mm 240×120 (MXN)",    "pvc6_lamina"),
-            ("Lámina PVC 2mm 240×120 (MXN)",    "pvc2_lamina"),
-            ("Mano de obra 0 (MXN)",             "mano_obra_0"),
-            ("Corte láser por metro (MXN)",       "corte_laser_metro"),
-            ("Mano de obra 1 (MXN)",             "mano_obra_1"),
-            ("Mano de obra 2 (MXN)",             "mano_obra_2"),
-            ("Mano de obra 3 (MXN)",             "mano_obra_3"),
-            ("Rollo LED 5m (MXN)",               "led_rollo"),
-            ("Instalación (MXN)",                "instalacion"),
-            ("Pintura por letra (MXN)",          "pintura_letra"),
-            ("Espárrago unidad (MXN)",           "esparragos_unit"),
-            ("Snaps unidad (MXN)",               "snaps_unit"),
-            ("Tubo roscado 10cm unidad (MXN)",   "tubo_roscado_unit"),
-        ]
-        for i, (lbl, key) in enumerate(fields, start=1):
-            self.mat_vars[key] = self._price_row(f, i, lbl, key)
+        row_i = [0]  # mutable counter
+
+        def section(title):
+            row_i[0] += 1
+            self._lbl(f, title, bold=True).grid(
+                row=row_i[0], column=0, columnspan=2, sticky="w",
+                padx=14, pady=(12, 2))
+
+        def divider():
+            row_i[0] += 1
+            tk.Frame(f, bg="#cccccc", height=1).grid(
+                row=row_i[0], column=0, columnspan=2, sticky="ew",
+                padx=14, pady=(2, 0))
+
+        def field(label, key):
+            row_i[0] += 1
+            self.mat_vars[key] = self._price_row(f, row_i[0], label, key)
+
+        section("Materiales")
+        field("Panel Aluminio 240×120 (MXN)",      "panel_aluminio_lamina")
+        field("Lámina Acrílico Z2 240×120 (MXN)", "acrilico_lamina")
+        field("Lámina Spec 240×120 (MXN)",         "aluminio_lamina")
+        field("Lámina PVC 6mm 240×120 (MXN)",      "pvc6_lamina")
+        field("Lámina PVC 2mm 240×120 (MXN)",      "pvc2_lamina")
+
+        divider()
+        section("Mano de obra")
+        field("MO 0 — sin realce (MXN)",            "mano_obra_0")
+        field("MO 1 — básica (MXN)",                "mano_obra_1")
+        field("MO 2 — Aluminio-Aluminio (MXN)",     "mano_obra_2")
+        field("MO 3 — Acrílico-Acrílico (MXN)",    "mano_obra_3")
+        field("Corte láser por metro (MXN)",        "corte_laser_metro")
+        field("Pintura por letra (MXN)",            "pintura_letra")
+
+        divider()
+        section("Iluminación")
+        field("Rollo LED 5m (MXN)",                 "led_rollo")
+
+        divider()
+        section("Fijación")
+        field("Espárrago — unidad (MXN)",           "esparragos_unit")
+        field("Snaps — unidad (MXN)",               "snaps_unit")
+        field("Tubo roscado 10cm — unidad (MXN)",   "tubo_roscado_unit")
+
+        divider()
+        section("Servicios")
+        field("Instalación (MXN)",                  "instalacion")
 
     # ── Tab 2: Vinil ──────────────────────────────────────────────────────
     def _tab_vinil(self, f):
@@ -4058,19 +4083,6 @@ class App(tk.Tk):
         self.desc_text.pack(anchor="w", pady=(2, 0))
 
         tk.Frame(left, bg=DIVL, height=1).pack(fill="x", pady=(16, 14))
-
-        # ── Opciones adicionales ──────────────────────────────────────────
-        tk.Label(left, text="Fijación (4 por letra)", bg=BG, fg=FG2,
-                 font=("Segoe UI", 8)).pack(anchor="w", pady=(0, 2))
-        om = tk.OptionMenu(left, self.esparragos_var,
-                           "Ninguno", "Espárrago", "Snaps", "Tubo roscado 10cm")
-        om.config(bg=BG3, fg=FG, activebackground="#333333", activeforeground=FG,
-                  highlightthickness=0, relief="flat", anchor="w",
-                  font=("Segoe UI", 9), bd=0, padx=8, pady=5, width=18,
-                  indicatoron=True)
-        om["menu"].config(bg=BG3, fg=FG, activebackground="#333333",
-                          activeforeground=FG, font=("Segoe UI", 9))
-        om.pack(anchor="w", fill="x", pady=(0, 10))
 
         # ── Botones acción ────────────────────────────────────────────────
         RoundedButton(left, text="Calcular cotización",
@@ -4482,10 +4494,46 @@ class App(tk.Tk):
         row("Pintura", f"{r['n_letters']} letras  →  {fmt(r['c_pintura'])}", key="c_pintura")
         for bi, (nombre, precio) in enumerate(basicos):
             row(f"  {nombre}", fmt(precio), key=f"_basico_{bi}")
-        _lbl_fij = r.get("tipo_fijacion", "Ninguno")
-        if _lbl_fij != "Ninguno":
-            row(f"{_lbl_fij} ({r.get('n_esparragos', 0)} pzas)",
-                fmt(r.get("c_esparragos", 0.0)), key="c_esparragos")
+        # ── Selector de fijación inline ───────────────────────────────────
+        _fij_frame = tk.Frame(res_frame, bg=bg)
+        _fij_frame.pack(fill="x", pady=2)
+        tk.Label(_fij_frame, text="Fijación", bg=bg, fg=fg,
+                 font=("Segoe UI", 9)).pack(side="left")
+        _fij_om = tk.OptionMenu(_fij_frame, self.esparragos_var,
+                                "Ninguno", "Espárrago", "Snaps", "Tubo roscado 10cm")
+        _fij_om.config(bg="#e8e8e8", fg="#1a1a1a", activebackground="#333333",
+                       activeforeground="#ffffff", highlightthickness=0,
+                       relief="flat", font=("Segoe UI", 9), bd=0,
+                       padx=6, pady=2, width=16, indicatoron=True)
+        _fij_om["menu"].config(bg="#e8e8e8", fg="#1a1a1a",
+                               activebackground="#333333", activeforeground="#ffffff",
+                               font=("Segoe UI", 9))
+        _fij_om.pack(side="left", padx=(8, 0))
+
+        _fij_val_var = tk.StringVar()
+        _fij_val_lbl = tk.Label(res_frame, textvariable=_fij_val_var,
+                                bg=bg, fg=fg, font=("Segoe UI", 9))
+        _fij_val_lbl.pack(anchor="w", padx=(16, 0))
+
+        def _on_fij_change(*_):
+            _tipo = self.esparragos_var.get()
+            _fij_precios = {
+                "Espárrago":         self.cfg["precios"].get("esparragos_unit",    3.66),
+                "Snaps":             self.cfg["precios"].get("snaps_unit",         10.0),
+                "Tubo roscado 10cm": self.cfg["precios"].get("tubo_roscado_unit",  15.0),
+            }
+            r["tipo_fijacion"] = _tipo
+            _n = r.get("n_esparragos", 0)
+            r["c_esparragos"] = _n * _fij_precios.get(_tipo, 0) if _tipo != "Ninguno" else 0.0
+            if _tipo != "Ninguno":
+                _fij_val_var.set(f"  {_tipo} ({_n} pzas)  →  {fmt(r['c_esparragos'])}")
+                _fij_val_lbl.pack(anchor="w", padx=(16, 0))
+            else:
+                _fij_val_var.set("")
+                _fij_val_lbl.pack_forget()
+            _recalc_total()
+        self.esparragos_var.trace_add("write", _on_fij_change)
+        _on_fij_change()  # render initial state
         sep()
 
         c_vinil = r.get("c_vinil", 0.0)
@@ -4685,9 +4733,17 @@ class App(tk.Tk):
         _ico(_has_inst, "🔧 Instalación").grid(row=1, column=4, padx=(0, 4), sticky="w")
         _ico(_has_pvc6, "📦 Charola"    ).grid(row=1, column=5, padx=(0, 4), sticky="w")
 
-        _fij_col = "#27ae60" if _tipo_fij != "Ninguno" else "#e74c3c"
-        tk.Label(bottom, text=f"📌 {_tipo_fij}", bg=bg, fg=_fij_col,
-                 font=("Segoe UI", 8, "bold")).grid(row=1, column=6, padx=(0, 4), sticky="w")
+        _fij_ico_lbl = tk.Label(bottom, text="", bg=bg,
+                                font=("Segoe UI", 8, "bold"))
+        _fij_ico_lbl.grid(row=1, column=6, padx=(0, 4), sticky="w")
+
+        def _update_fij_ico(*_):
+            _t = self.esparragos_var.get()
+            _fij_ico_lbl.config(
+                text=f"📌 {_t}",
+                fg="#27ae60" if _t != "Ninguno" else "#e74c3c")
+        self.esparragos_var.trace_add("write", _update_fij_ico)
+        _update_fij_ico()
 
     # ── Sign type selector ────────────────────────────────────────────────
     def _select_type(self, idx):
