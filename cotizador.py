@@ -4477,25 +4477,21 @@ class App(tk.Tk):
         sep()
 
         basicos = r.get("basicos", [])
-        if basicos:
-            tk.Label(res_frame, text="Básicos", bg=bg, fg=acc,
-                     font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
-            row("Pintura", f"{r['n_letters']} letras  →  {fmt(r['c_pintura'])}", key="c_pintura")
-            for bi, (nombre, precio) in enumerate(basicos):
-                row(f"  {nombre}", fmt(precio), key=f"_basico_{bi}")
-            sep()
+        tk.Label(res_frame, text="Básicos", bg=bg, fg=acc,
+                 font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(4,2))
+        row("Pintura", f"{r['n_letters']} letras  →  {fmt(r['c_pintura'])}", key="c_pintura")
+        for bi, (nombre, precio) in enumerate(basicos):
+            row(f"  {nombre}", fmt(precio), key=f"_basico_{bi}")
+        _lbl_fij = r.get("tipo_fijacion", "Ninguno")
+        if _lbl_fij != "Ninguno":
+            row(f"{_lbl_fij} ({r.get('n_esparragos', 0)} pzas)",
+                fmt(r.get("c_esparragos", 0.0)), key="c_esparragos")
+        sep()
 
         c_vinil = r.get("c_vinil", 0.0)
         if c_vinil > 0:
             row("Vinil / Vinil con transfer", fmt(c_vinil), color=fg,
                 key="c_vinil")
-            sep()
-
-        c_esp = r.get("c_esparragos", 0.0)
-        if c_esp > 0:
-            lbl_fij = r.get("tipo_fijacion", "Fijación")
-            row(f"{lbl_fij} ({r.get('n_esparragos', 0)} pzas)", fmt(c_esp),
-                color=fg, key="c_esparragos")
             sep()
 
         # ── extras ────────────────────────────────────────────────────────
@@ -4671,9 +4667,27 @@ class App(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Error al exportar PDF", str(e))
 
-        # Replace the nesting button command to track the window reference
-        # (add PDF button separately so it always has latest state)
         _btn(bottom, "Exportar PDF", "#111111", "#ffffff", _export_pdf, r=1, c=2)
+
+        # ── Iconos de estado junto al PDF ─────────────────────────────────
+        _dis = r.get("_disabled", set())
+        def _ico(active, label):
+            col = "#27ae60" if active else "#e74c3c"
+            return tk.Label(bottom, text=label, bg=bg, fg=col,
+                            font=("Segoe UI", 8, "bold"))
+
+        _has_leds    = "c_leds"        not in _dis and r.get("c_leds", 0) > 0
+        _has_inst    = "c_instalacion" not in _dis and r.get("c_instalacion", 0) > 0
+        _has_pvc6    = "c_pvc6"        not in _dis and r.get("c_pvc6", 0) > 0
+        _tipo_fij    = r.get("tipo_fijacion", "Ninguno")
+
+        _ico(_has_leds, "💡 LEDs"       ).grid(row=1, column=3, padx=(10,4), sticky="w")
+        _ico(_has_inst, "🔧 Instalación").grid(row=1, column=4, padx=(0, 4), sticky="w")
+        _ico(_has_pvc6, "📦 Charola"    ).grid(row=1, column=5, padx=(0, 4), sticky="w")
+
+        _fij_col = "#27ae60" if _tipo_fij != "Ninguno" else "#e74c3c"
+        tk.Label(bottom, text=f"📌 {_tipo_fij}", bg=bg, fg=_fij_col,
+                 font=("Segoe UI", 8, "bold")).grid(row=1, column=6, padx=(0, 4), sticky="w")
 
     # ── Sign type selector ────────────────────────────────────────────────
     def _select_type(self, idx):
