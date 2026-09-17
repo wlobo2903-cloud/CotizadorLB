@@ -1996,36 +1996,130 @@ def export_svg(placements, n_pieces, output_folder, piece_sizes=None):
     return files
 
 
-def export_dxf(placements, n_pieces, output_folder):
+def export_dxf(placements, n_pieces, output_folder, piece_sizes=None):
     """
-    Export each piece as DXF. Uses high-resolution LWPOLYLINE (300 pts/subpath).
-    For perfect bezier curves open the SVG in Illustrator and export from there.
+    Export each piece as DXF using native SPLINE entities for bezier curves —
+    mathematically identical to the SVG source paths.
     """
+    import re
     import ezdxf
+    from ezdxf import path as dxf_path
+    from ezdxf.math import Vec3
+
+    if piece_sizes is None:
+        piece_sizes = {}
     os.makedirs(output_folder, exist_ok=True)
     files = []
-    MM = 10   # cm → mm
-    SAMPLES = 300  # high resolution to minimize faceting
+    MM = 10  # cm → mm
+
+    def _flip(x_cm, y_cm, ph):
+        return x_cm * MM, (ph - y_cm) * MM
+
+    def _add_path_entities(msp, p_obj, layer, ph):
+        """Convert an ezdxf Path to spline/line entities and add to msp."""
+        for entity in dxf_path.to_splines_and_bulges(p_obj, dxfattribs={"layer": layer}):
+            msp.add_entity(entity)
+
+    def _placement_dxf_paths(p, ph):
+        """
+        Build ezdxf Path objects (one per SVG subpath) with the original
+        bezier control points — no sampling, exact geometry.
+        """
+        bx0, by0   = p["bbox_origin"]
+        w_px, h_px = p["bbox_size_px"]
+        sc  = p["scale"]
+        ang = p["angle"]
+        cos_a = math.cos(math.radians(ang))
+        sin_a = math.sin(math.radians(ang))
+        cx_svg = bx0 + w_px / 2
+        cy_svg = by0 + h_px / 2
+        pcx = p["x"] + p["actual_w"] / 2
+        pcy = p["y"] + p["actual_h"] / 2
+
+        def tf(px_, py_):
+            dx = (px_ - cx_svg) * sc
+            dy = (py_ - cy_svg) * sc
+            rx = pcx + dx * cos_a - dy * sin_a
+            ry = pcy + dx * sin_a + dy * cos_a
+            fx, fy = _flip(rx, ry, ph)
+            return Vec3(fx, fy, 0)
+
+        result = []
+        for shape in p.get("shapes", []):
+            try:
+                t = shape["type"]
+                if t == "path":
+                    for sp_str in re.findall(r'[Mm][^Mm]+', shape["d"]):
+                        sp = parse_path(sp_str)
+                        if not sp:
+                            continue
+                        start_pt = sp[0].start
+                        dp = dxf_path.Path(start=tf(start_pt.real, start_pt.imag))
+                        for seg in sp:
+                            from svgpathtools import CubicBezier, QuadraticBezier, Line, Arc
+                            if isinstance(seg, CubicBezier):
+                                dp.curve4_to(
+                                    tf(seg.end.real,     seg.end.imag),
+                                    tf(seg.control1.real, seg.control1.imag),
+                                    tf(seg.control2.real, seg.control2.imag),
+                                )
+                            elif isinstance(seg, QuadraticBezier):
+                                dp.curve3_to(
+                                    tf(seg.end.real,     seg.end.imag),
+                                    tf(seg.control.real, seg.control.imag),
+                                )
+                            else:
+                                # Line or Arc — just add as line
+                                dp.line_to(tf(seg.end.real, seg.end.imag))
+                        result.append(dp)
+                elif t == "rect":
+                    corners = [
+                        (shape["x"],             shape["y"]),
+                        (shape["x"] + shape["w"], shape["y"]),
+                        (shape["x"] + shape["w"], shape["y"] + shape["h"]),
+                        (shape["x"],             shape["y"] + shape["h"]),
+                    ]
+                    dp = dxf_path.Path(start=tf(*corners[0]))
+                    for c in corners[1:]:
+                        dp.line_to(tf(*c))
+                    dp.line_to(tf(*corners[0]))
+                    result.append(dp)
+                elif t in ("circle", "ellipse"):
+                    r1 = shape.get("r", shape.get("rx", 1))
+                    r2 = shape.get("r", shape.get("ry", 1))
+                    cx2, cy2 = shape.get("cx", 0), shape.get("cy", 0)
+                    pts = [tf(cx2 + r1 * math.cos(2 * math.pi * k / 64),
+                              cy2 + r2 * math.sin(2 * math.pi * k / 64))
+                           for k in range(65)]
+                    dp = dxf_path.Path(start=pts[0])
+                    for pt in pts[1:]:
+                        dp.line_to(pt)
+                    result.append(dp)
+                elif t == "poly" and shape["coords"]:
+                    dp = dxf_path.Path(start=tf(*shape["coords"][0]))
+                    for c in shape["coords"][1:]:
+                        dp.line_to(tf(*c))
+                    dp.line_to(tf(*shape["coords"][0]))
+                    result.append(dp)
+            except Exception:
+                pass
+        return result
 
     for pi in range(n_pieces):
+        pw, ph = PIECE_CONFIGS.get(piece_sizes.get(pi, "full"), (PIECE_W, PIECE_H))
         doc = ezdxf.new("R2010")
         doc.units = 4  # mm
         msp = doc.modelspace()
         doc.layers.new("BORDE", dxfattribs={"color": 5})
         doc.layers.new("CORTE", dxfattribs={"color": 1})
 
-        # Piece boundary
         msp.add_lwpolyline(
-            [(0,0),(PIECE_W*MM,0),(PIECE_W*MM,PIECE_H*MM),(0,PIECE_H*MM)],
+            [(0, 0), (pw * MM, 0), (pw * MM, ph * MM), (0, ph * MM)],
             close=True, dxfattribs={"layer": "BORDE"})
 
         for letter in [p for p in placements if p["piece"] == pi]:
-            for pts in _placement_subpaths_cm(letter, samples=SAMPLES):
-                if len(pts) < 2:
-                    continue
-                mm_pts = [(x*MM, (PIECE_H - y)*MM) for x, y in pts]
-                msp.add_lwpolyline(mm_pts, close=True,
-                                   dxfattribs={"layer": "CORTE"})
+            for dp in _placement_dxf_paths(letter, ph):
+                _add_path_entities(msp, dp, "CORTE", ph)
 
         fpath = os.path.join(output_folder, f"z2_{pi+1:02d}.dxf")
         doc.saveas(fpath)
@@ -2584,7 +2678,8 @@ class NestingWindow(tk.Toplevel):
                     files += export_svg(self.placements, self.n_pieces, folder,
                                         piece_sizes=self.piece_sizes)
                 if fmt in ("dxf", "both"):
-                    files += export_dxf(self.placements, self.n_pieces, folder)
+                    files += export_dxf(self.placements, self.n_pieces, folder,
+                                        piece_sizes=self.piece_sizes)
                 win.destroy()
                 messagebox.showinfo("Exportacion completa",
                                     f"Se exportaron {len(files)} archivos en:\n{folder}")
