@@ -2016,8 +2016,8 @@ def export_dxf(placements, n_pieces, output_folder, piece_sizes=None):
         return x_cm * MM, (ph - y_cm) * MM
 
     def _add_path_entities(msp, p_obj, layer, ph):
-        """Convert an ezdxf Path to spline/line entities and add to msp."""
-        for entity in dxf_path.to_splines_and_bulges(p_obj, dxfattribs={"layer": layer}):
+        """Convert an ezdxf Path to spline/polyline entities and add to msp."""
+        for entity in dxf_path.to_splines_and_polylines(p_obj, dxfattribs={"layer": layer}):
             msp.add_entity(entity)
 
     def _placement_dxf_paths(p, ph):
